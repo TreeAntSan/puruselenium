@@ -1,0 +1,38 @@
+Notes
+
+XPath for an image single page (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img
+
+XPath for double images manga style (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[2] -- The first page (right)
+/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[1] -- The second page (left)
+
+XPath for double image western style (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[1] -- The first page (left)
+/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[2] -- The second page (right)
+
+XPath for the Single Page Button (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[2]/div[4]/a[1]
+
+XPath for the Western Page Button (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[2]/div[4]/a[2]
+
+XPath for the Manga Page Button (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[2]/div[4]/a[3]
+
+XPath for the Next Button (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]/a[2]
+
+XPath for the Previous Button (auto generated)
+/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]/a[1]
+
+Example page of End of Book
+http://pururin.com/finish/15220/ffx-yuna-a-la-mode-4
+
+Docs
+
+Find functions and more:
+http://selenium.googlecode.com/git/docs/api/py/webdriver_remote/selenium.webdriver.remote.webdriver.html
+
+Exceptions:
+http://selenium.googlecode.com/git/docs/api/py/common/selenium.common.exceptions.html#module-selenium.common.exceptions
