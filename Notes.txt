@@ -29,10 +29,21 @@ XPath for the Previous Button (auto generated)
 Example page of End of Book
 http://pururin.com/finish/15220/ffx-yuna-a-la-mode-4
 
+XPath of Page Number "of 10"
+/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[2]/span/label
+
 Docs
 
-Find functions and more:
+Find functions and more (Webdriver functions):
 http://selenium.googlecode.com/git/docs/api/py/webdriver_remote/selenium.webdriver.remote.webdriver.html
+
+Element Functions and more (Selenium.Selenium):
+http://selenium.googlecode.com/git/docs/api/py/selenium/selenium.selenium.html?highlight=get_attribute
 
 Exceptions:
 http://selenium.googlecode.com/git/docs/api/py/common/selenium.common.exceptions.html#module-selenium.common.exceptions
+
+
+Tools
+
+WGET https://pypi.python.org/pypi/wget
