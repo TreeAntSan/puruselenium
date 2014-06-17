@@ -60,6 +60,7 @@ def imageDownloader(url, directory):
 
 	# Parse the image name from the url
 	imageFileName = url[rfind(url,'/')+1:]
+	imageFileName = fileNamePadder(imageFileName)
 
 	# Download the image file
 	r = get(url)
@@ -68,6 +69,11 @@ def imageDownloader(url, directory):
 	imageFile = open(directory + '/' + imageFileName, 'w')
 	imageFile.write(r.content)
 	imageFile.close()
+
+
+def fileNamePadder(fileName):
+	# Improves the filename by giving a padded number. CDisplay for Windows, for example, fails at ordering without them.
+	return fileName[:rfind(fileName, '-')+1] + fileName[rfind(fileName, '-')+1:rfind(fileName,'.')].zfill(3) + fileName[rfind(fileName,'.'):]
 
 
 def createArchive(directory, zip):
