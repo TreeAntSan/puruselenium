@@ -46,7 +46,7 @@ xpath_doubleButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[4]/a[2]' # 
 xpath_imageElementA = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[1]'
 xpath_imageElementB = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[2]'
 xpath_nextPageButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]/a[2]'
-xpath_galleryFirstPage = '/html/body/div[2]/div[1]/div/div/div[1]/div/div[3]/ul/li[1]/a/img[1]'
+xpath_galleryFirstPage = "//ul[@class='thumblist']/li[1]/a/img[1]"
 
 
 def imageDownloader(url, directory):
@@ -89,7 +89,7 @@ def imageURLCrawler(startArray):
 	if len(options.startURL) > 0:
 		print "Starting URL: %s" % options.startURL
 	if len(options.openList) > 0:
-		print "Opening list file %s" % openList
+		print "Opening list file %s" % options.openList
 	if options.writeFile:
 		print "Writing image urls to file. View saved files in %s" % outputDir
 	if options.download:
@@ -100,8 +100,8 @@ def imageURLCrawler(startArray):
 		print "Downloading and archiving images enabled. View saved .zip in %s" % outputDir
 	if options.dual:
 		print "Dual page mode enabled."
+	print "Set to download %s book(s)" % len(startArray)
 	print "Throttle set to %s seconds.\n-------" % options.throttle
-
 
 	for startURL in startArray:
 		driver.get(startURL)
@@ -185,11 +185,11 @@ def imageURLCrawler(startArray):
 			nextPageButton = driver.find_element_by_xpath(xpath_nextPageButton)
 			nextPageButton.click()
 
+
+		### End of loop for this gallery
 		# Write the archive file.
 		if options.zip or options.cbz:
-			extension = 'zip'
-			if options.cbz:
-				extension = 'cbz'
+			extension = 'zip' if options.zip else 'cbz'
 
 			zipf = zipfile.ZipFile(outputDir + '/' + bookName + '.' + extension, 'w')
 			createArchive(outputDir + '/' + bookName, zipf)
@@ -213,7 +213,7 @@ def imageURLCrawler(startArray):
 			outfile.close()
 			print "Wrote to file \"%s\"" % (outputDir + '/' + bookName + ".txt")
 
-		### End of loop for this gallery
+		
 		sleep(throttle*2)
 
 
@@ -251,3 +251,4 @@ if len(options.startURL) > 0:
 
 # Do it!
 returnArray = imageURLCrawler(startArray)
+print "-------\nDone!"
