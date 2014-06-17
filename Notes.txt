@@ -46,7 +46,15 @@ http://selenium.googlecode.com/git/docs/api/py/selenium/selenium.selenium.html?h
 Exceptions:
 http://selenium.googlecode.com/git/docs/api/py/common/selenium.common.exceptions.html#module-selenium.common.exceptions
 
+ZipFile Docs
+https://docs.python.org/2/library/zipfile.html#zipfile-objects
 
 Tools
 
 WGET https://pypi.python.org/pypi/wget
+
+urllib, urllib2, and requests
+http://stackoverflow.com/questions/22676/how-do-i-download-a-file-over-http-using-python
+
+Zip a Directory
+http://stackoverflow.com/questions/1855095/how-to-create-a-zip-archive-of-a-directory-in-python
