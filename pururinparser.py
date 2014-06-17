@@ -49,10 +49,6 @@ xpath_nextPageButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]
 xpath_galleryFirstPage = '/html/body/div[2]/div[1]/div/div/div[1]/div/div[3]/ul/li[1]/a/img[1]'
 
 
-#### Common vars
-outputDir = 'output'
-
-
 def imageDownloader(url, directory):
 	# Create the 'downloads' directory
 	if not isdir(directory):
@@ -86,6 +82,8 @@ def imageURLCrawler(startArray):
 	# Start up Firefox
 	driver = webdriver.Firefox()
 
+	outputDir = options.export
+
 	# Print out some stuff.
 	print "\n-------\nStarting image crawler..."
 	if len(options.startURL) > 0:
@@ -93,13 +91,13 @@ def imageURLCrawler(startArray):
 	if len(options.openList) > 0:
 		print "Opening list file %s" % openList
 	if options.writeFile:
-		print "Writing image urls to file. View saved files in ./%s" % outputDir
+		print "Writing image urls to file. View saved files in %s" % outputDir
 	if options.download:
-		print "Downloading images enabled. View saved files in ./%s" % outputDir
+		print "Downloading images enabled. View saved files in %s" % outputDir
 	if options.cbz:
-		print "Downloading and archiving images enabled. View saved .cbz in ./%s" % outputDir
+		print "Downloading and archiving images enabled. View saved .cbz in %s" % outputDir
 	elif options.zip:
-		print "Downloading and archiving images enabled. View saved .zip in ./%s" % outputDir
+		print "Downloading and archiving images enabled. View saved .zip in %s" % outputDir
 	if options.dual:
 		print "Dual page mode enabled."
 	print "Throttle set to %s seconds.\n-------" % options.throttle
@@ -229,6 +227,7 @@ parser.add_option("-s", "--startURL", help="The starting URL", default='', metav
 parser.add_option("-o", "--openList", help="List file (\\n delimit)", default='', metavar="filename")
 parser.add_option("-n", "--pageLimit", help="Only download n pages", default='9999', metavar="integer")
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
+parser.add_option("-e", "--export", help="Export directory", default='output', metavar="string")
 parser.add_option("-d", "--dual", help="Dual Page Mode", default=False, action="store_true")
 parser.add_option("-w", "--writeFile", help="Write URLs to file", default=False, action="store_true")
 parser.add_option("-l", "--download", help="Download images to directory", default=False, action="store_true")
