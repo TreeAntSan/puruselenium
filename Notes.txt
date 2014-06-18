@@ -1,4 +1,4 @@
-Notes
+###XPath Notes###
 
 XPath for an image single page (auto generated)
 /html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img
@@ -35,13 +35,16 @@ XPath of Page Number "of 10"
 XPath for a Galley Page link to the first page (auto generated)
 /html/body/div[2]/div[1]/div/div/div[1]/div/div[3]/ul/li[1]/a/img
 
-Docs
+###Docs###
 
 Find functions and more (Webdriver functions):
 http://selenium.googlecode.com/git/docs/api/py/webdriver_remote/selenium.webdriver.remote.webdriver.html
 
 Element Functions and more (Selenium.Selenium):
-http://selenium.googlecode.com/git/docs/api/py/selenium/selenium.selenium.html?highlight=get_attribute
+http://selenium.googlecode.com/git/docs/api/py/selenium/selenium.selenium.html
+
+More Element functions:
+http://selenium.googlecode.com/git/docs/api/py/webdriver_remote/selenium.webdriver.remote.webelement.html
 
 Exceptions:
 http://selenium.googlecode.com/git/docs/api/py/common/selenium.common.exceptions.html#module-selenium.common.exceptions
@@ -49,7 +52,10 @@ http://selenium.googlecode.com/git/docs/api/py/common/selenium.common.exceptions
 ZipFile Docs
 https://docs.python.org/2/library/zipfile.html#zipfile-objects
 
-Tools
+XPath Help
+http://www.w3schools.com/xpath/xpath_syntax.asp
+
+###Tools###
 
 WGET https://pypi.python.org/pypi/wget
 

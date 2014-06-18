@@ -1,7 +1,7 @@
 # Standard
 from optparse import OptionParser
 from time import sleep
-from string import rfind, split
+from string import rfind, split, capwords, replace
 from os.path import isfile, isdir, join
 from os import mkdir, makedirs, walk
 from shutil import rmtree
@@ -47,6 +47,8 @@ xpath_imageElementA = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[1]'
 xpath_imageElementB = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[2]'
 xpath_nextPageButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]/a[2]'
 xpath_galleryFirstPage = "//ul[@class='thumblist']/li[1]/a/img[1]"
+# xpath_galleryArtistName = '/html/body/div[2]/div[1]/div/div/div[1]/div/div[1]/div[1]/div[2]/table/tbody/tr[1]/td[2]/ul/li/a'
+xpath_galleryArtistName = "//ul[@class='tag-list'][1]/li[1]/a"
 
 
 def imageDownloader(url, directory):
@@ -103,9 +105,25 @@ def imageURLCrawler(startArray):
 	print "Set to download %s book(s)" % len(startArray)
 	print "Throttle set to %s seconds.\n-------" % options.throttle
 
+	x = 0
 	for startURL in startArray:
+		x += 1
+		print "Downloading book %s of %s" % (x, len(startArray))
+
 		driver.get(startURL)
 
+		# Attempt to grab the artist name if we're on the correct gallery page.
+		artistName = ""
+		try:
+			artistNameElement = driver.find_element_by_xpath(xpath_galleryArtistName)
+			artistName = artistNameElement.text #driver.get_text(artistNameElement)
+			artistName = split(artistName, ',')[0] # Sometimes aliases are used. Grab just the first one.
+			print artistName
+			quit()
+		except NoSuchElementException:
+			pass # Do nothing, we coo.
+
+		# Navigate to to the first page if we're on a gallery or thumbnails page.
 		try:
 			galleryFirstPage = driver.find_element_by_xpath(xpath_galleryFirstPage)
 			galleryFirstPage.click()
@@ -135,12 +153,16 @@ def imageURLCrawler(startArray):
 				imageUrlA = imageElementA.get_attribute('src')
 				
 				urlString += imageUrlA + "\n"
-				print imageUrlA
-
+				
 				# Name the book from the last '/'+1 to the last '-'
 				if len(bookName) == 0:
 					bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
+					bookName = replace(capwords(bookName, '-'), '-', ' ')
+					if len(artistName) > 0:
+						bookName = artistName + ' - ' + bookName
+					print "Title: %s" % bookName
 
+				print imageUrlA
 				# Download imageUrlA
 				if options.download or options.zip or options.cbz:
 					imageDownloader(imageUrlA, outputDir + '/' + bookName)
