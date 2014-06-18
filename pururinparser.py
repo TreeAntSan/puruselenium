@@ -1,7 +1,7 @@
 # Standard
 from optparse import OptionParser
 from time import sleep
-from string import rfind, split, capwords, replace
+from string import rfind, split, capwords, replace, find, lower, strip
 from os.path import isfile, isdir, join
 from os import mkdir, makedirs, walk
 from shutil import rmtree
@@ -37,7 +37,7 @@ from requests import get
 
 # This will create zip/cbz files for you as an option. They are not compressed.
 
-#### Maintenance
+#### XPath String Maintenance
 # If things stop working. Get the plugin Firebug for Firefox, open it, navigate
 # to a page, and use the Blue-Arrow-In-Box tool to investigate an element. Click it,
 # then in list right click the hi-lited area and select "copy XPath".
@@ -47,10 +47,9 @@ xpath_imageElementA = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[1]'
 xpath_imageElementB = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[2]'
 xpath_nextPageButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]/a[2]'
 xpath_galleryFirstPage = "//ul[@class='thumblist']/li[1]/a/img[1]"
-# xpath_galleryArtistName = '/html/body/div[2]/div[1]/div/div/div[1]/div/div[1]/div[1]/div[2]/table/tbody/tr[1]/td[2]/ul/li/a'
-xpath_galleryArtistName = "//ul[@class='tag-list'][1]/li[1]/a"
+xpath_tableInfo = "//table[@class='table-info']"
 
-
+# Downloads an image and names it from a URL.
 def imageDownloader(url, directory):
 	# Create the 'downloads' directory
 	if not isdir(directory):
@@ -68,18 +67,40 @@ def imageDownloader(url, directory):
 	imageFile.write(r.content)
 	imageFile.close()
 
-
+# Improves the filename by giving a padded number.
+# CDisplay for Windows, for example, fails at ordering without them. (1, 11, 12,..., 19, 2, 20,...)
 def fileNamePadder(fileName):
-	# Improves the filename by giving a padded number. CDisplay for Windows, for example, fails at ordering without them.
 	return fileName[:rfind(fileName, '-')+1] + fileName[rfind(fileName, '-')+1:rfind(fileName,'.')].zfill(3) + fileName[rfind(fileName,'.'):]
 
 
+# Function archives the contents of the desired directory. Only writes to an existing zip object.
 def createArchive(directory, zip):
 	for root, dirs, files, in walk(directory):
 		for file in files:
 			zip.write(join(root, file))
 
+# Parses the contents of the table-info element for tags.
+# Keep in mind that if there is more than one artist, for example, it'll say 'Artists'
+# So instead of exact matches I use find. So if perhaps there is more than one
+# parody, expect a possible use of 'parodies', so search for 'parod'
+def tagListGrabber(desiredTagName, driver):
+	tagReturn = ''
 
+	for x in range(1,20): # Try up to 19 elements
+		try:
+			xpath_tagCheck = xpath_tableInfo + '/tbody/tr[%s]/td[%s]%s'
+			tagElement = driver.find_element_by_xpath(xpath_tagCheck % (x, '1', ''))
+			if find(lower(tagElement.text), lower(desiredTagName)) != -1:
+				tagValueElement = driver.find_element_by_xpath(xpath_tagCheck % (x, '2', '/ul/li/a'))
+				return tagValueElement.text
+		except NoSuchElementException:
+			if (x == 1):
+				break # If this broke on the first time, then just give up - wrong page.
+			pass # Do nothing, we coo.
+
+	return '' # Didn't get the tag.
+
+# The main function. Starts with a string array of starting URLs.
 def imageURLCrawler(startArray):
 	# Start up Firefox
 	driver = webdriver.Firefox()
@@ -106,22 +127,25 @@ def imageURLCrawler(startArray):
 	print "Throttle set to %s seconds.\n-------" % options.throttle
 
 	x = 0
+	# Book loop. If there are multiple books loaded, it'll do each one in this loop.
 	for startURL in startArray:
 		x += 1
 		print "Downloading book %s of %s" % (x, len(startArray))
 
+		# Go to the starting page!
 		driver.get(startURL)
 
 		# Attempt to grab the artist name if we're on the correct gallery page.
-		artistName = ""
-		try:
-			artistNameElement = driver.find_element_by_xpath(xpath_galleryArtistName)
-			artistName = artistNameElement.text #driver.get_text(artistNameElement)
-			artistName = split(artistName, ',')[0] # Sometimes aliases are used. Grab just the first one.
-			print artistName
-			quit()
-		except NoSuchElementException:
-			pass # Do nothing, we coo.
+		artistName = tagListGrabber('artist', driver)
+		artistName = split(artistName, ',')[0] # Sometimes aliases are used. Grab just the first one.
+
+		# Attempt to grab a parody tag.
+		parodyTagList = tagListGrabber('parod', driver)
+		parodyTag = ""
+		for parody in split(parodyTagList, ','):
+			if lower(parody) != 'original':
+				# Grab the first parody tag that isn't 'Original'.
+				parodyTag = parody.strip() # Strip surrounding white space
 
 		# Navigate to to the first page if we're on a gallery or thumbnails page.
 		try:
@@ -132,12 +156,11 @@ def imageURLCrawler(startArray):
 
 		pagesPer = 1
 		if options.dual:	# Switch to 'western' dual page mode
-			sleep(2) # Sometimes this comes in slow
+			sleep(2) 		# Sometimes this loads in slow
 			doubleButton = driver.find_element_by_xpath(xpath_doubleButton)
 			doubleButton.click()
 			pagesPer = 2
 			
-
 		throttle = int(options.throttle)
 		pageLimit = int(options.pageLimit)
 
@@ -157,15 +180,26 @@ def imageURLCrawler(startArray):
 				# Name the book from the last '/'+1 to the last '-'
 				if len(bookName) == 0:
 					bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
+
+					# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
 					bookName = replace(capwords(bookName, '-'), '-', ' ')
+
+					# Add the artist name to front if available (start from Gallery Page)
 					if len(artistName) > 0:
 						bookName = artistName + ' - ' + bookName
+
+					# Add first parody to front if available (start from Gallery Page)
+					if len(parodyTag) > 0:
+						bookName = parodyTag + ' - ' + bookName
+
+					# Print out title to console
 					print "Title: %s" % bookName
 
-				print imageUrlA
 				# Download imageUrlA
 				if options.download or options.zip or options.cbz:
 					imageDownloader(imageUrlA, outputDir + '/' + bookName)
+
+				print imageUrlA
 
 			except NoSuchElementException:
 				print "Reached end for \"%s\", got through around %s pages." % (bookName, pagesPer*page)
@@ -188,11 +222,12 @@ def imageURLCrawler(startArray):
 					if imageUrlB != None:
 						urlString += imageUrlB + "\n"
 						pastImageUrlB = imageUrlB
-						print imageUrlB
-
+						
 						# Download imageUrlB
 						if options.download or options.zip or options.cbz:
 							imageDownloader(imageUrlB, outputDir + '/' + bookName)
+
+						print imageUrlB
 					else:
 						page -= 1
 
