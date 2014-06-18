@@ -156,10 +156,14 @@ def imageURLCrawler(startArray):
 
 		pagesPer = 1
 		if options.dual:	# Switch to 'western' dual page mode
-			sleep(2) 		# Sometimes this loads in slow
-			doubleButton = driver.find_element_by_xpath(xpath_doubleButton)
-			doubleButton.click()
-			pagesPer = 2
+			for x in range(10):	# Sometimes this loads in slow, so we try 10 times with 1 sec rests
+				try:
+					doubleButton = driver.find_element_by_xpath(xpath_doubleButton)
+					doubleButton.click()
+					pagesPer = 2
+					break	# It worked! Break from the loop.
+				except NoSuchElementException:
+					sleep(1) # It didn't work! Rest for a second
 			
 		throttle = int(options.throttle)
 		pageLimit = int(options.pageLimit)
@@ -202,7 +206,7 @@ def imageURLCrawler(startArray):
 				print imageUrlA
 
 			except NoSuchElementException:
-				print "Reached end for \"%s\", got through around %s pages." % (bookName, pagesPer*page)
+				print "Reached end for \"%s\" on A, got through around %s pages." % (bookName, pagesPer*page)
 				break
 
 
@@ -211,7 +215,7 @@ def imageURLCrawler(startArray):
 				try:
 					imageElementB = driver.find_element_by_xpath(xpath_imageElementB)
 					imageUrlB = imageElementB.get_attribute('src')
-					if imageUrlB == pastImageUrlB:
+					if imageUrlB == pastImageUrlB and len(imageUrlB) > 0 and len(pastImageUrlB) > 0:
 						# When there is just one image, this exception doesn't get thrown for some reason
 						# So as a remedy, if the url is the same as the last time around, I throw it.
 						raise NoSuchElementException()	
@@ -232,7 +236,7 @@ def imageURLCrawler(startArray):
 						page -= 1
 
 				except NoSuchElementException:
-					print "Reached end for \"%s\", got through around %s pages." % (bookName, (pagesPer*page)+1)
+					print "Reached end for \"%s\" on B, got through around %s pages." % (bookName, (pagesPer*page)+1)
 					break
 				
 			# Throttle the speed, otherwise Selenium will rip through pages a half-second a piece.
@@ -301,6 +305,7 @@ if isfile(options.openList):
 	listFile = open(options.openList, 'r')
 	listContents = listFile.read()
 	startArray = split(listContents, "\n")
+	listFile.close()
 
 # Append the startURL to the startArray
 if len(options.startURL) > 0:
