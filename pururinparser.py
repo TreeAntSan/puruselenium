@@ -126,11 +126,11 @@ def imageURLCrawler(startArray):
 	print "Set to download %s book(s)" % len(startArray)
 	print "Throttle set to %s seconds.\n-------" % options.throttle
 
-	x = 0
+	bookNumber = 0
 	# Book loop. If there are multiple books loaded, it'll do each one in this loop.
 	for startURL in startArray:
-		x += 1
-		print "Downloading book %s of %s" % (x, len(startArray))
+		bookNumber += 1
+		print "Downloading book %s of %s" % (bookNumber, len(startArray))
 
 		# Go to the starting page!
 		driver.get(startURL)
@@ -215,30 +215,29 @@ def imageURLCrawler(startArray):
 				try:
 					imageElementB = driver.find_element_by_xpath(xpath_imageElementB)
 					imageUrlB = imageElementB.get_attribute('src')
-					if imageUrlB == pastImageUrlB and len(imageUrlB) > 0 and len(pastImageUrlB) > 0:
-						# When there is just one image, this exception doesn't get thrown for some reason
-						# So as a remedy, if the url is the same as the last time around, I throw it.
-						raise NoSuchElementException()	
 
-					# When there are double-wide images, the site automatically shows only one image.
-					# It fails in a special way with imageUrlB == None, so if I see this, we'll side step
-					# the need to grab imageUrlB this time.
-					if imageUrlB != None:
-						urlString += imageUrlB + "\n"
-						pastImageUrlB = imageUrlB
-						
-						# Download imageUrlB
-						if options.download or options.zip or options.cbz:
-							imageDownloader(imageUrlB, outputDir + '/' + bookName)
+					# When there is just one image imageUrlB will repeat itself.
+					# One page could appear if there is a double-wide page or there is only one page left.
+					if imageUrlB != pastImageUrlB:
 
-						print imageUrlB
-					else:
-						page -= 1
+						# When there are double-wide images, the site automatically shows only one image.
+						# It fails in a special way with imageUrlB == None, so if I see this, we'll side step
+						# the need to grab imageUrlB this time.
+						if imageUrlB != None:
+							urlString += imageUrlB + "\n"
+							pastImageUrlB = imageUrlB
+							
+							# Download imageUrlB
+							if options.download or options.zip or options.cbz:
+								imageDownloader(imageUrlB, outputDir + '/' + bookName)
 
+							print imageUrlB
+						else:
+							page -= 1
 				except NoSuchElementException:
-					print "Reached end for \"%s\" on B, got through around %s pages." % (bookName, (pagesPer*page)+1)
-					break
-				
+					pass # Do nothing, we coo.
+
+
 			# Throttle the speed, otherwise Selenium will rip through pages a half-second a piece.
 			sleep(throttle)
 
