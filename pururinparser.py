@@ -170,6 +170,7 @@ def imageURLCrawler(startArray):
 
 		urlString = ""
 		bookName = ""
+		pastImageUrlA = "" # Prevent situations where it'll infinitely redownload one page.
 		pastImageUrlB = "" # Work around for uneven pages in dual mode.
 
 		for page in range(pageLimit):
@@ -179,31 +180,32 @@ def imageURLCrawler(startArray):
 				imageElementA = driver.find_element_by_xpath(xpath_imageElementA)
 				imageUrlA = imageElementA.get_attribute('src')
 				
-				urlString += imageUrlA + "\n"
-				
-				# Name the book from the last '/'+1 to the last '-'
-				if len(bookName) == 0:
-					bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
+				if imageUrlA != pastImageUrlA:
+					urlString += imageUrlA + "\n"
+					
+					# Name the book from the last '/'+1 to the last '-'
+					if len(bookName) == 0:
+						bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
 
-					# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
-					bookName = replace(capwords(bookName, '-'), '-', ' ')
+						# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
+						bookName = replace(capwords(bookName, '-'), '-', ' ')
 
-					# Add the artist name to front if available (start from Gallery Page)
-					if len(artistName) > 0:
-						bookName = artistName + ' - ' + bookName
+						# Add the artist name to front if available (start from Gallery Page)
+						if len(artistName) > 0:
+							bookName = artistName + ' - ' + bookName
 
-					# Add first parody to front if available (start from Gallery Page)
-					if len(parodyTag) > 0:
-						bookName = parodyTag + ' - ' + bookName
+						# Add first parody to front if available (start from Gallery Page)
+						if len(parodyTag) > 0:
+							bookName = parodyTag + ' - ' + bookName
 
-					# Print out title to console
-					print "Title: %s" % bookName
+						# Print out title to console
+						print "Title: %s" % bookName
 
-				# Download imageUrlA
-				if options.download or options.zip or options.cbz:
-					imageDownloader(imageUrlA, outputDir + '/' + bookName)
+					# Download imageUrlA
+					if options.download or options.zip or options.cbz:
+						imageDownloader(imageUrlA, outputDir + '/' + bookName)
 
-				print imageUrlA
+					print imageUrlA
 
 			except NoSuchElementException:
 				print "Reached end for \"%s\" on A, got through around %s pages." % (bookName, pagesPer*page)
