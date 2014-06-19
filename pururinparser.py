@@ -130,11 +130,13 @@ def imageURLCrawler(startArray):
 	bookNumber = 0
 	# Book loop. If there are multiple books loaded, it'll do each one in this loop.
 	for startURL in startArray:
+		bookNumber += 1
 		if len(startURL) == 0:
-			break # Skip blank lines
+			print "Skipping blank URL."
+			continue # Skip blank lines
 
 		print "Downloading book located at %s" % startURL
-		bookNumber += 1
+		
 		print "Downloading book %s of %s" % (bookNumber, len(startArray))
 
 		# Go to the starting page!
