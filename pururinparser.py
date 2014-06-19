@@ -2,6 +2,7 @@
 from optparse import OptionParser
 from time import sleep
 from string import rfind, split, capwords, replace, find, lower, strip
+from re import sub
 from os.path import isfile, isdir, join
 from os import mkdir, makedirs, walk
 from shutil import rmtree
@@ -49,6 +50,15 @@ xpath_nextPageButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]
 xpath_galleryFirstPage = "//ul[@class='thumblist']/li[1]/a/img[1]"
 xpath_tableInfo = "//table[@class='table-info']"
 
+
+def directoryCleaner(directory):
+	# Replace any potentially illegal characters with an underscore
+	# These usually come from tags.
+
+	# return sub('[^\w\-_\. ]', '_', directory) # Aggresive
+	return sub('[\\\/:\*?"<>|]', '_', directory) # Relaxed
+
+
 # Downloads an image and names it from a URL.
 def imageDownloader(url, directory):
 	# Create the 'downloads' directory
@@ -67,6 +77,7 @@ def imageDownloader(url, directory):
 	imageFile.write(r.content)
 	imageFile.close()
 
+
 # Improves the filename by giving a padded number.
 # CDisplay for Windows, for example, fails at ordering without them. (1, 11, 12,..., 19, 2, 20,...)
 # Limits file names before number and extension to 50 characters
@@ -80,26 +91,26 @@ def createArchive(directory, zip):
 		for file in files:
 			zip.write(join(root, file))
 
+
 # Parses the contents of the table-info element for tags.
 # Keep in mind that if there is more than one artist, for example, it'll say 'Artists'
 # So instead of exact matches I use find. So if perhaps there is more than one
 # parody, expect a possible use of 'parodies', so search for 'parod'
 def tagListGrabber(desiredTagName, driver):
-	tagReturn = ''
-
 	for x in range(1,20): # Try up to 19 elements
 		try:
 			xpath_tagCheck = xpath_tableInfo + '/tbody/tr[%s]/td[%s]%s'
 			tagElement = driver.find_element_by_xpath(xpath_tagCheck % (x, '1', ''))
 			if find(lower(tagElement.text), lower(desiredTagName)) != -1:
 				tagValueElement = driver.find_element_by_xpath(xpath_tagCheck % (x, '2', '/ul/li/a'))
-				return tagValueElement.text
+				return directoryCleaner(tagValueElement.text) # Remove any illegal characters
 		except NoSuchElementException:
 			if (x == 1):
 				break # If this broke on the first time, then just give up - wrong page.
 			pass # Do nothing, we coo.
 
 	return '' # Didn't get the tag.
+
 
 # The main function. Starts with a string array of starting URLs.
 def imageURLCrawler(startArray):
@@ -135,9 +146,8 @@ def imageURLCrawler(startArray):
 			print "Skipping blank URL."
 			continue # Skip blank lines
 
-		print "Downloading book located at %s" % startURL
-		
 		print "Downloading book %s of %s" % (bookNumber, len(startArray))
+		print "Downloading book located at %s" % startURL		
 
 		# Go to the starting page!
 		driver.get(startURL)
