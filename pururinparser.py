@@ -69,8 +69,9 @@ def imageDownloader(url, directory):
 
 # Improves the filename by giving a padded number.
 # CDisplay for Windows, for example, fails at ordering without them. (1, 11, 12,..., 19, 2, 20,...)
+# Limits file names before number and extension to 50 characters
 def fileNamePadder(fileName):
-	return fileName[:rfind(fileName, '-')+1] + fileName[rfind(fileName, '-')+1:rfind(fileName,'.')].zfill(3) + fileName[rfind(fileName,'.'):]
+	return fileName[:rfind(fileName, '-')+1][:50] + fileName[rfind(fileName, '-')+1:rfind(fileName,'.')].zfill(3) + fileName[rfind(fileName,'.'):]
 
 
 # Function archives the contents of the desired directory. Only writes to an existing zip object.
@@ -129,6 +130,10 @@ def imageURLCrawler(startArray):
 	bookNumber = 0
 	# Book loop. If there are multiple books loaded, it'll do each one in this loop.
 	for startURL in startArray:
+		if len(startURL) == 0:
+			break # Skip blank lines
+
+		print "Downloading book located at %s" % startURL
 		bookNumber += 1
 		print "Downloading book %s of %s" % (bookNumber, len(startArray))
 
