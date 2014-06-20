@@ -118,6 +118,9 @@ def imageURLCrawler(startArray):
 	driver = webdriver.Firefox()
 
 	outputDir = options.export
+	if len(outputDir) == 0:
+		print "WARNING: CANNOT HAVE A BLANK OUTPUT DIRECTORY. QUITTING."
+		quit()
 
 	# Print out some stuff.
 	print "\n-------\nStarting image crawler..."
