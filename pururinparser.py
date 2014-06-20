@@ -237,7 +237,7 @@ def imageURLCrawler(startArray):
 
 					# When there is just one image imageUrlB will repeat itself.
 					# One page could appear if there is a double-wide page or there is only one page left.
-					if imageUrlB != pastImageUrlB:
+					if imageUrlB != pastImageUrlB and imageUrlB != imageUrlA and imageUrlB != pastImageUrlA:
 
 						# When there are double-wide images, the site automatically shows only one image.
 						# It fails in a special way with imageUrlB == None, so if I see this, we'll side step
