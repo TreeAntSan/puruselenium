@@ -186,7 +186,7 @@ def imageURLCrawler(startArray):
 		pageLimit = int(options.pageLimit)
 
 		urlString = ""
-		bookName = ""
+		bookName = "ERROR_BLANK_BOOK_NAME" # Need to write something
 		pastImageUrlA = "" # Prevent situations where it'll infinitely redownload one page.
 		pastImageUrlB = "" # Work around for uneven pages in dual mode.
 
@@ -201,7 +201,7 @@ def imageURLCrawler(startArray):
 					urlString += imageUrlA + "\n"
 					
 					# Name the book from the last '/'+1 to the last '-'
-					if len(bookName) == 0:
+					if len(bookName) == "ERROR_BLANK_BOOK_NAME":
 						bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
 
 						# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
@@ -268,6 +268,10 @@ def imageURLCrawler(startArray):
 		### End of loop for this gallery
 		# Write the archive file.
 		if options.zip or options.cbz:
+			if len(bookName) == 0:
+				print "WARNING. BOOKNAME IS BLANK. CANNOT ARCHIVE %s. QUITTING." % outputDir + '/'
+				quit()
+
 			extension = 'zip' if options.zip else 'cbz'
 
 			zipf = zipfile.ZipFile(outputDir + '/' + bookName + '.' + extension, 'w')
@@ -279,6 +283,7 @@ def imageURLCrawler(startArray):
 			# If the download option isn't set, delete the download directory.
 			if not options.download:
 				rmtree(outputDir + '/' + bookName)
+
 			else:
 				print "Wrote to directory \"%s\"" % (outputDir + '/' + bookName + '/')
 
