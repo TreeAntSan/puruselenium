@@ -201,7 +201,7 @@ def imageURLCrawler(startArray):
 					urlString += imageUrlA + "\n"
 					
 					# Name the book from the last '/'+1 to the last '-'
-					if len(bookName) == "ERROR_BLANK_BOOK_NAME":
+					if bookName == "ERROR_BLANK_BOOK_NAME":
 						bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
 
 						# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
