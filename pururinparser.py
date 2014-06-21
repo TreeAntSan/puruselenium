@@ -195,12 +195,15 @@ def imageURLCrawler(startArray):
 
 		for page in range(pageLimit):
 
+			imageUrlA = ""
+			imageUrlB = ""
+			
 			# Deal with the image element
 			try:
 				imageElementA = driver.find_element_by_xpath(xpath_imageElementA)
 				imageUrlA = imageElementA.get_attribute('src')
 				
-				if imageUrlA != pastImageUrlA:
+				if imageUrlA != pastImageUrlA and imageUrlA != pastImageUrlB:
 					urlString += imageUrlA + "\n"
 					
 					# Name the book from the last '/'+1 to the last '-'
