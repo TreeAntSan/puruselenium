@@ -219,7 +219,7 @@ def imageURLCrawler(startArray):
 
 						# Add first parody to front if available (start from Gallery Page)
 						if len(parodyTag) > 0:
-							bookName = parodyTag + ' - ' + bookName
+							bookName = bookName + ' - ' + parodyTag
 
 						# Print out title to console
 						print "Title: %s" % bookName

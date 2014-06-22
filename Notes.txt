@@ -35,6 +35,9 @@ XPath of Page Number "of 10"
 XPath for a Galley Page link to the first page (auto generated)
 /html/body/div[2]/div[1]/div/div/div[1]/div/div[3]/ul/li[1]/a/img
 
+Galleries Page
+//ul[@class='gallery-list']/li[X]/div/a
+
 ###Docs###
 
 Find functions and more (Webdriver functions):
