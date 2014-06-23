@@ -213,13 +213,13 @@ def imageURLCrawler(startArray):
 						# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
 						bookName = replace(capwords(bookName, '-'), '-', ' ')
 
+						# Add first parody to front if available (start from Gallery Page)
+						if len(parodyTag) > 0:
+							bookName = parodyTag + ' - ' + bookName
+
 						# Add the artist name to front if available (start from Gallery Page)
 						if len(artistName) > 0:
 							bookName = artistName + ' - ' + bookName
-
-						# Add first parody to front if available (start from Gallery Page)
-						if len(parodyTag) > 0:
-							bookName = bookName + ' - ' + parodyTag
 
 						# Print out title to console
 						print "Title: %s" % bookName
