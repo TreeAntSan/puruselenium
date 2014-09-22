@@ -38,6 +38,8 @@ XPath for a Galley Page link to the first page (auto generated)
 Galleries Page
 //ul[@class='gallery-list']/li[X]/div/a
 
+/html/body/div[2]/div[1]/div/div/div[1]/div/div[2]/ul
+
 ###Docs###
 
 Find functions and more (Webdriver functions):

@@ -49,6 +49,7 @@ xpath_imageElementB = '/html/body/div[2]/div[1]/div[2]/div/div[1]/a[2]/img[2]'
 xpath_nextPageButton = '/html/body/div[2]/div[1]/div[2]/div/div[2]/div[1]/div[1]/a[2]'
 xpath_galleryFirstPage = "//ul[@class='thumblist']/li[1]/a/img[1]"
 xpath_tableInfo = "//table[@class='table-info']"
+xpath_gallery = "//ul[@class='gallery-list']"
 
 
 def directoryCleaner(directory):
@@ -112,8 +113,30 @@ def tagListGrabber(desiredTagName, driver):
 	return '' # Didn't get the tag.
 
 
+# If you give a gallery page in the url, this will parse all the books on the gallery page
+# and spit them all back out in a simple list. 
+# If it didn't work, returns an empty list!
+def galleryGrab(driver):
+	try:
+		galleryElement = driver.find_element_by_xpath(xpath_gallery)
+	except NoSuchElementException:
+		return [] # Got nothing
+
+	newLinks = [] # If this is a gallery, we'll store the urls of each one!
+	for x in range(1, int(options.gallery)+1): # Try elements 1->n gallery arg
+		try:
+			xpath_bookCheck = xpath_gallery + '/li[%s]/div/a'
+			bookElement = driver.find_element_by_xpath(xpath_bookCheck % x)
+			newLink = bookElement.get_attribute('href') # Grab the book url
+			newLinks.append(newLink)	# Add it to the list
+		except NoSuchElementException:
+			break # Stop, we've hit the end
+
+	return newLinks	# Return the booty!
+
+
 # The main function. Starts with a string array of starting URLs.
-def imageURLCrawler(startArray):
+def imageURLCrawler(urlList):
 	# Start up Firefox
 	driver = webdriver.Firefox()
 
@@ -138,22 +161,35 @@ def imageURLCrawler(startArray):
 		print "Downloading and archiving images enabled. View saved .zip in %s" % outputDir
 	if options.dual:
 		print "Dual page mode enabled."
-	print "Set to download %s book(s)" % len(startArray)
-	print "Throttle set to %s seconds.\n-------" % options.throttle
+	print "Set to download %s book(s)" % len(urlList)
+	print "Throttle set to %s second(s).\n-------" % options.throttle
 
 	bookNumber = 0
 	# Book loop. If there are multiple books loaded, it'll do each one in this loop.
-	for startURL in startArray:
+	for startURL in urlList:
 		bookNumber += 1
 		if len(startURL) == 0:
 			print "Skipping blank URL."
 			continue # Skip blank lines
 
-		print "Downloading book %s of %s" % (bookNumber, len(startArray))
-		print "Downloading book located at %s" % startURL		
+		print "Viewing link %s of %s: %s" % (bookNumber, len(urlList), startURL)
 
 		# Go to the starting page!
 		driver.get(startURL)
+
+		# Handle gallery pages
+		galleryLinks = galleryGrab(driver)
+		if len(galleryLinks) > 0:
+			print "That last link was a gallery! %s books were found:" % len(galleryLinks)
+			
+			# Some fuckin' fancy footwork here. In-place alter to print out book titles from html links
+			print capwords(replace(', '.join([bookUrl[bookUrl.rfind('/')+1:bookUrl.rfind('.html')] for bookUrl in galleryLinks]), '-', ' '))
+			
+			# Insert the new books after the gallery link (must keep it to keep place)
+			urlList[bookNumber:bookNumber] = galleryLinks
+
+			# Start the loop over again, but this time with an updated urlList
+			continue
 
 		# Attempt to grab the artist name if we're on the correct gallery page.
 		artistName = tagListGrabber('artist', driver)
@@ -211,7 +247,7 @@ def imageURLCrawler(startArray):
 						bookName = imageUrlA[rfind(imageUrlA, '/')+1:rfind(imageUrlA, '-')]
 
 						# Format it nice. 'book-title-thing' becomes 'Book Title Thing'
-						bookName = replace(capwords(bookName, '-'), '-', ' ')
+						bookName = capwords(replace(bookName, '-', ' '))
 
 						# Add first parody to front if available (start from Gallery Page)
 						if len(parodyTag) > 0:
@@ -307,7 +343,7 @@ def imageURLCrawler(startArray):
 		sleep(throttle*2)
 
 
-	### End of startArray for loop
+	### End of urlList for loop
 	driver.quit()
 
 
@@ -316,6 +352,7 @@ parser = OptionParser()
 parser.add_option("-s", "--startURL", help="The starting URL", default='', metavar="startURL")
 parser.add_option("-o", "--openList", help="List file (\\n delimit)", default='', metavar="filename")
 parser.add_option("-n", "--pageLimit", help="Only download n pages", default='9999', metavar="integer")
+parser.add_option("-g", "--gallery", help="Gallery page size", default='20', metavar="integer")
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
 parser.add_option("-e", "--export", help="Export directory", default='output', metavar="string")
 parser.add_option("-d", "--dual", help="Dual Page Mode", default=False, action="store_true")
@@ -327,19 +364,19 @@ parser.add_option("-c", "--cbz", help="OR: Create a cbz file", default=False, ac
 (options, args) = parser.parse_args()
 # print "options:\n  %s\nargs:\n  %s" % (options, args)
 
-startArray = []
+urlList = []
 
 # Open the list file (if one was specified)
 if isfile(options.openList):
 	listFile = open(options.openList, 'r')
 	listContents = listFile.read()
-	startArray = split(listContents, "\n")
+	urlList = split(listContents, "\n")
 	listFile.close()
 
-# Append the startURL to the startArray
+# Append the startURL to the urlList
 if len(options.startURL) > 0:
-	startArray.append(options.startURL)
+	urlList.append(options.startURL)
 
 # Do it!
-returnArray = imageURLCrawler(startArray)
+returnArray = imageURLCrawler(urlList)
 print "-------\nDone!"
