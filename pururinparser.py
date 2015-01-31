@@ -17,24 +17,21 @@ from requests import get
 # This tool is in Python (written in 2.7.3) written in Summer 2014
 
 # The two libraries it uses is pypi Selenium, which can be found here:
-# https://pypi.python.org/pypi/selenium
+# 	https://pypi.python.org/pypi/selenium
 # And Requests, which can be found here:
-# http://docs.python-requests.org/en/latest/index.html
+# 	http://docs.python-requests.org/en/latest/index.html
+# Using the tool pip can be very helpful:
+# 	https://pip.pypa.io/en/latest/installing.html
 
 # Download Python 2.7.X (whatever is current X), figure out how to get
 # command line access, navigate your terminal to the location
 # of this program, run "python pururinparser.py --help"
 
-# Basically, take this, take the URLs into a txt file, open in Firefox, and
-# use the plugin DownThemAll! (it's a trustworthy plugin) to download them.
-# DTA may need an option checked to read from plain text. Be sure to self-throttle
-# your downloads or fear an IP ban.
-
-# Starting page can be either the first page OR the gallery. Book name is determined
-# by the name of the first page image.
+# Starting page can be either the first page OR the gallery page OR a gallery itself.
+# Book name is determined by the name of the first page image.
 
 # You can even import a txt file with the starting URL for each book you want.
-# Just paste the full http:// link onto a single line byitself, nothing else.
+# Just paste the full http:// link onto a single line by itself, nothing else.
 
 # This will create zip/cbz files for you as an option. They are not compressed.
 
@@ -241,6 +238,7 @@ def imageURLCrawler(urlList):
 				
 				if imageUrlA != pastImageUrlA and imageUrlA != pastImageUrlB:
 					urlString += imageUrlA + "\n"
+					pastImageUrlA = imageUrlA
 					
 					# Name the book from the last '/'+1 to the last '-'
 					if bookName == "ERROR_BLANK_BOOK_NAME":
