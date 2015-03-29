@@ -5,7 +5,7 @@ from datetime import datetime
 from string import split, capwords, replace, find, lower, strip
 from re import sub
 from os.path import isfile, isdir, join
-from os import mkdir, makedirs, walk, getenv
+from os import mkdir, makedirs, walk, getenv, getcwd
 from shutil import rmtree
 import zipfile
 import pprint
@@ -14,6 +14,7 @@ pp = pprint.PrettyPrinter(indent=2)
 # 3rd Party
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from requests import get
@@ -59,14 +60,15 @@ pururin_xpath_gallery = "//ul[@class='gallery-list']"
 #Pixiv
 pixiv_css_user_name = "h1.user"
 pixiv_css_image_item = "li.image-item"
-pixiv_xpath_first_image_item = "//li[@class='image-item ']/a[1]"#"//ul[@class='_image_items']/li[1]/a[2]/h1"
+pixiv_xpath_first_image_item = "//li[@class='image-item ']/a[1]"
 pixiv_id_login_name = "login_pixiv_id"
 pixiv_id_login_pass = "login_password"
 pixiv_id_login_submit = "login_submit"
 pixiv_css_image_class = "img.original-image"
 pixiv_id_album_close = "window-close"
 pixiv_css_next_work = "li.after a"
-pixiv_css_work_title = "h1.title"
+pixiv_xpath_work_title = "//div[@class='ui-expander-target'/h1"
+pixiv_css_work_title = "div[class=ui-expander-target]>h1[class^=title]"
 pixiv_css_work_tab = "a.tab-works"
 pixiv_css_tag_badge = "span.tag-badge"
 pixiv_css_original_image = "img.original-image"
@@ -74,11 +76,19 @@ pixiv_css_original_image_close = "span.close.ui-modal-close"
 pixiv_css_thumbnail_image = "div._layout-thumbnail.ui-modal-trigger"
 pixiv_css_album_link = "a._work.multiple"
 pixiv_xpath_album_items = "/html/body/section[2]/section/div[%s]/img"
+pixiv_xpath_return_from_album = "//ul[@class='breadcrumbs']/li[3]/h1/a"
+pixiv_css_return_from_album = "ul.breadcrumbs li h1 a"
 
 #Other
 time_stamp_format = '%Y-%m-%d %H-%M-%S'
 user_agent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0"
 headers = {'User-Agent': user_agent}
+
+# Using a adblock load trick with custom adblock.xpi (with modified ui.js file)
+# http://stackoverflow.com/q/20832159/3120546
+# Pixiv otherwise takes FOREVER with terrible ads from Japanese servers that seldom load quickly
+adblock_xpi = getcwd() + '/adblock.xpi'
+
 
 # Grab an element that may not be there 
 def tryGrabbingElement(driver, elementType, elementAddress):
@@ -91,6 +101,7 @@ def tryGrabbingElement(driver, elementType, elementAddress):
 			return driver.find_element_by_id(elementAddress)
 	except NoSuchElementException:
 		return None
+
 
 # Replace any potentially illegal characters with an underscore
 # These usually come from tags.
@@ -112,24 +123,14 @@ def imageDownloader(url, directory, imageFileName="", cookie=None, referer=None)
 
 	# Download the image file
 	if referer != None:
-		headers['referer'] = referer
-		# r = get(url, headers=headers, cookies=cookie)
-	# else:
+		headers['referer'] = referer # Use referer to avoid 403 with Pixiv
+
 	r = get(url, headers=headers, cookies=cookie)
 
 	# Write the image file
 	imageFile = open(directory + '/' + imageFileName, 'w')
 	imageFile.write(r.content)
 	imageFile.close()
-
-# Pixiv 403's any attempt to hotlink DL images. So we'll use Firefox's save image and cross
-# our fingers hoping it works.
-def imageDownloaderContext(driver, element, directory, imageFileName):
-	fullSavePath = directory + '/' + imageFileName
-	ActionChains(driver).context_click(element).send_keys('v').perform()
-	sleep(2) # wait a second for the save dialog to show
-	ActionChains(driver).send_keys(Keys.CONTROL, 'a').send_keys(fullSavePath).perform()
-	ActionChains(driver).send_keys(Keys.RETURN).send_keys(Keys.RETURN).perform()
 
 
 # Improves the filename by giving a padded number.
@@ -324,7 +325,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 
 		return [bookName, urlString]
 
-
+# Pixiv album parser, returns array of image URLs
 def pixivAlbumGrab(driver):
 	itemUrls = []
 	albumExhausted = False
@@ -334,19 +335,26 @@ def pixivAlbumGrab(driver):
 		try:
 			itemElement = driver.find_element_by_xpath((pixiv_xpath_album_items % albumItemNumber))
 			itemElement.click() # Be like a normal human and click each image
-			itemUrl = itemElement.get_attribute('href') # Grab this item's URL
-			itemUrls.append(itemUrl)
+			itemUrls.append(itemElement.get_attribute('href')) # Grab this item's URL
 		except NoSuchElementException:
 			break # Stop, we've hit the end
 
-	driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
+	try:
+		driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
+	except TimeoutException:
+		driver.refresh()
+	print itemUrls
 	return itemUrls # Return the links!
 
 
 # All the pixiv-side magic
 def pixiv(driver, startURL, loginNeeded, outputDir):
 	# Go to the starting page!
-	driver.get(startURL)
+	driver.set_page_load_timeout(15)
+	try:
+		driver.get(startURL)
+	except TimeoutException:
+		driver.refresh()
 	
 	# Wait, do we need to log in first?
 	if loginNeeded:
@@ -354,7 +362,10 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 	# On their profile or something, hit their "Works" tab link
 	if "member_illust" not in driver.current_url:
-		driver.find_element_by_css_selector(pixiv_css_work_tab).click()
+		try:
+			driver.find_element_by_css_selector(pixiv_css_work_tab).click()
+		except TimeoutException:
+			driver.refresh()
 
 	# Let's create a name for this book
 	userNameElement = tryGrabbingElement(driver, 'css', pixiv_css_user_name)
@@ -374,20 +385,22 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 	# Book's title is "user's name - tag"
 	bookName = userName + tag
 
-	print "Title: %s" % bookName
+	print "Book title: %s" % bookName
 
 	# Alrighty, time to get some images!
-	# Maybe our starting link is their work tab?
-	# if tryGrabbingElement(driver, 'css', pixiv_css_next_work) == None:
 	if "illust_id" not in driver.current_url:
 		# We're on their works main page, let's click their first work...
-		driver.find_element_by_xpath(pixiv_xpath_first_image_item).click()
+		try:
+			driver.find_element_by_xpath(pixiv_xpath_first_image_item).click()
+		except TimeoutException:
+			driver.refresh()
 
+	# -------- COOKIES?!?!??! --------
 	#http://stackoverflow.com/questions/7854077/using-a-session-cookie-from-selenium-in-urllib2
-	all_cookies = driver.get_cookies()
-	cookies = {}
-	for cookie in all_cookies:
-		cookies[cookie["name"]]=cookie["value"]
+	cookies = None
+	# all_cookies = driver.get_cookies()
+	# for cookie in all_cookies:
+	# 	cookies[cookie["name"]]=cookie["value"]
 
 	# ------ We're now viewing works ------ Loop time! ------
 	workNumber = 0
@@ -396,7 +409,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 		workNumber += 1
 		urlString = ""
 		
-		# Let's grab an image title
+		# Let's grab an work title
 		workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title)
 		if workTitleElement != None:
 			workTitle = workTitleElement.text[:25] # Limit the name to 25 characters
@@ -414,60 +427,32 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 				imageUrl = originalImageElement.get_attribute('src')
 				urlString += imageUrl + "\n"
 
-				# backUp = driver.current_url
-				# driver.get(imageUrl)
-
 				# Grab the file extension
 				fileExtension = imageUrl[imageUrl.rfind('.'):]
 
 				# Let's give this work a nice, long name
-				# imageName = "{} - {}_{}".format(bookName, str(workNumber).zfill(3), workTitle)
-				imageName = "{} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, fileExtension)
+				imageName = "{} - {} - {}{}".format(bookName, str(workNumber).zfill(3), workTitle, fileExtension)
 
 				# Let's download it!
 				print "Attempting DL: %s" % imageName
 				imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, cookies, driver.current_url)
-				# imageDownloaderContext(driver, originalImageElement, outputDir + '/' + bookName, imageName)
 
 				# Click it closed
 				driver.find_element_by_css_selector(pixiv_css_original_image_close).click()
 
-
-				# driver.get(backUp)
-		else: # ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM -------
+		# ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM -------
+		else:
 			albumThumbNailElement = tryGrabbingElement(driver, 'css', pixiv_css_album_link)
 			if albumThumbNailElement != None: # We're in an album!
-				albumThumbNailElement.click()
 
+				# Nagivate directly to album URL (clicking opens a new window, bad for WebDriver)
+				workURL = driver.current_url
+				try:
+					driver.get(albumThumbNailElement.get_attribute('href'))
+				except TimeoutException:
+					driver.refresh()
 
-				# albumExhausted = False
-				# albumItemNumber = 0
-				# while not albumExhausted:
-				# 	albumItemNumber += 1
-				# 	try:
-				# 		itemElement = driver.find_element_by_xpath((pixiv_xpath_album_items % albumItemNumber))
-				# 		itemUrl = itemElement.get_attribute('href') # Grab this item's URL anyway
-				# 		urlString += imageUrl + "\n"
-
-				# 		# Grab the file extension
-				# 		fileExtension = imageUrl[imageUrl.rfind('.'):]
-
-				# 		# Let's give this work a nice, long name
-				# 		imageName = "{} - {}_{}-{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumItemNumber).zfill(3), fileExtension)
-
-				# 		# Let's download it!
-				# 		imageDownloaderContext(driver, itemElement, outputDir + '/' + bookName, imageName)
-
-				# 		itemElement.click() # Be like a normal human and click each image
-						
-				# 	except NoSuchElementException:
-				# 		break # Stop, we've hit the end
-
-				# driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
-
-			albumThumbNailElement = tryGrabbingElement(driver, 'css', pixiv_css_album_link)
-			if albumThumbNailElement != None: # We're in an album!
-				albumThumbNailElement.click()
+				# Grab all the image URLs
 				albumImages = pixivAlbumGrab(driver)
 
 				albumSeriesNumber = 1
@@ -478,23 +463,34 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 					fileExtension = imageUrl[imageUrl.rfind('.'):]
 
 					# Let's give this work a nice, long name
-					imageName = "{} - {}_{}-{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
-					# imageName = "{} - {}_{}-{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3))
+					imageName = "{} - {} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
 
 					# Let's download it!
 					print "Attempting DL: %s" % imageName
-					imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, cookies)
-					# imageDownloaderContext(driver, originalImageElement, outputDir + '/' + bookName, imageName)
+					imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, cookies, driver.current_url)
 					albumSeriesNumber += 1 # Doing a series, add a new number
 
-					driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
+					driver.back()
+					# try:
+					# 	driver.get(workURL) # Return to the work detail page
+					# except TimeoutException:
+					# 	driver.refresh()
+
+					# Return to the work detail page
+					# try:
+					# 	driver.find_element_by_css_selector(pixiv_css_return_from_album).click() 
+					# except TimeoutException:
+					# 	driver.refresh()
 			else:
 				print "Wasn't an illustration or album! Maybe an animation?"
 
 		# Move onto the next element
 		nextWorkElement = tryGrabbingElement(driver, 'css', pixiv_css_next_work)
 		if nextWorkElement != None:
-			nextWorkElement.click()
+			try:
+				nextWorkElement.click()
+			except TimeoutException:
+				driver.refresh()
 		else:
 			print "Reached the end of Pixiv Book: \"%s\"" % bookName
 			exhausted = True # End this loop, we've reached the end of the collection
@@ -510,20 +506,33 @@ def pixivLogin(driver):
 
 	if len(userName) == 0 or len(passWord) == 0:
 		print "Hey, you need to define your Pixiv login info into the two env vars:"
-		print "$PIXIV_NAME and $PIXIV_PASS"
+		print "$PIXIV_NAME and $PIXIV_PASS. Edit the pixiv.sh file in a text editor!"
 		quit()
 
 	driver.find_element_by_id(pixiv_id_login_name).send_keys(userName)
 	driver.find_element_by_id(pixiv_id_login_pass).send_keys(passWord, Keys.RETURN)
 	
-	print "Logging in with %s:%s" % (userName, passWord)
+	print "Logging in to Pixiv with %s, %s" % (userName, passWord)
 
 
 # The main function. Starts with a string array of starting URLs.
 def imageURLCrawler(urlList):
 	# Start up Firefox
-	driver = webdriver.Firefox()
-	driver.implicitly_wait(5) # ?? Tries anyway if the page keeps loading after 5 sec?
+
+	firefoxProfile = webdriver.FirefoxProfile()
+	firefoxProfile.add_extension(adblock_xpi)
+	# Pixiv slow loading http://stackoverflow.com/a/22406998/3120546 fix??
+	firefoxProfile.set_preference("webdriver.load.strategy", "unstable");
+	firefoxProfile.set_preference("permissions.default.image", 2);
+	# firefoxProfile.set_preference("permissions.default.script", 2);
+	# firefoxProfile.set_preference("permissions.default.stylesheet", 2);
+	firefoxProfile.set_preference("permissions.default.subdocument", 2);
+
+
+
+
+	driver = webdriver.Firefox(firefox_profile=firefoxProfile)
+	driver.implicitly_wait(10) # ?? Tries anyway if the page keeps loading after 5 sec?
 
 	outputDir = options.export
 	if len(outputDir) == 0:
