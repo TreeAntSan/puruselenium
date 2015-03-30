@@ -10,6 +10,7 @@ from shutil import rmtree
 import zipfile
 import pprint
 pp = pprint.PrettyPrinter(indent=2)
+# use "pp.pprint(stuff)" to pprint your stuff
 
 # 3rd Party
 from selenium import webdriver
@@ -60,7 +61,7 @@ pururin_xpath_gallery = "//ul[@class='gallery-list']"
 #Pixiv
 pixiv_css_user_name = "h1.user"
 pixiv_css_image_item = "li.image-item"
-pixiv_xpath_first_image_item = "//li[@class='image-item ']/a[1]"
+pixiv_xpath_first_image_item = "//li[@class='image-item ']/a[2]"
 pixiv_id_login_name = "login_pixiv_id"
 pixiv_id_login_pass = "login_password"
 pixiv_id_login_submit = "login_submit"
@@ -68,13 +69,16 @@ pixiv_css_image_class = "img.original-image"
 pixiv_id_album_close = "window-close"
 pixiv_css_next_work = "li.after a"
 pixiv_xpath_work_title = "//div[@class='ui-expander-target'/h1"
-pixiv_css_work_title = "div[class=ui-expander-target]>h1[class^=title]"
+pixiv_css_work_title_a = "div[class=ui-expander-target]>h1[class^=title]"
+pixiv_css_work_title_b = "section[class=work-info]>h1[class^=title]"
 pixiv_css_work_tab = "a.tab-works"
 pixiv_css_tag_badge = "span.tag-badge"
 pixiv_css_original_image = "img.original-image"
 pixiv_css_original_image_close = "span.close.ui-modal-close"
 pixiv_css_thumbnail_image = "div._layout-thumbnail.ui-modal-trigger"
 pixiv_css_album_link = "a._work.multiple"
+pixiv_css_album_size = "span.total"
+pixiv_css_album_big = "img"
 pixiv_xpath_album_items = "/html/body/section[2]/section/div[%s]/img"
 pixiv_xpath_return_from_album = "//ul[@class='breadcrumbs']/li[3]/h1/a"
 pixiv_css_return_from_album = "ul.breadcrumbs li h1 a"
@@ -84,10 +88,17 @@ time_stamp_format = '%Y-%m-%d %H-%M-%S'
 user_agent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0"
 headers = {'User-Agent': user_agent}
 
-# Using a adblock load trick with custom adblock.xpi (with modified ui.js file)
+#Cookies
+driver_cookies = []
+request_cookies = []
+cookies_file_path = getcwd() + '/cookies'
+
+#AdBlockPlus
+# Using a adblock plus v2.6.6.3876 load trick with custom adblock.xpi (with modified ui.js file)
 # http://stackoverflow.com/q/20832159/3120546
 # Pixiv otherwise takes FOREVER with terrible ads from Japanese servers that seldom load quickly
 adblock_xpi = getcwd() + '/adblock.xpi'
+profile_location = getcwd() + '/profilemodel'
 
 
 # Grab an element that may not be there 
@@ -325,26 +336,32 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 
 		return [bookName, urlString]
 
-# Pixiv album parser, returns array of image URLs
-def pixivAlbumGrab(driver):
-	itemUrls = []
-	albumExhausted = False
-	albumItemNumber = 0
-	while not albumExhausted:
-		albumItemNumber += 1
-		try:
-			itemElement = driver.find_element_by_xpath((pixiv_xpath_album_items % albumItemNumber))
-			itemElement.click() # Be like a normal human and click each image
-			itemUrls.append(itemElement.get_attribute('href')) # Grab this item's URL
-		except NoSuchElementException:
-			break # Stop, we've hit the end
 
-	try:
-		driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
-	except TimeoutException:
-		driver.refresh()
-	print itemUrls
-	return itemUrls # Return the links!
+# Pixiv album parser, returns array of image URLs
+def pixivAlbumGrab(driver, albumURL):
+	albumURL = albumURL.replace('manga', 'manga_big') + '&page='	# Get the full page link
+ 	albumSize = int(driver.find_element_by_css_selector(pixiv_css_album_size).text)
+
+	itemUrlPairs = []
+	albumExhausted = False
+	for albumItemNumber in range(albumSize):
+		albumImageLargeURL = albumURL + str(albumItemNumber)
+		driver.get(albumImageLargeURL)
+
+		itemUrlPairs.append([albumImageLargeURL, driver.find_element_by_css_selector(pixiv_css_album_big).get_attribute('src')])
+		# try:
+		# 	itemElement = driver.find_element_by_xpath((pixiv_xpath_album_items % albumItemNumber))
+		# 	itemElement.click() # Be like a normal human and click each image
+		# 	itemUrls.append(itemElement.get_attribute('href')) # Grab this item's URL
+		# except NoSuchElementException:
+		# 	break # Stop, we've hit the end
+
+	# try:
+	# 	driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
+	# except TimeoutException:
+	# 	driver.refresh()
+	# print itemUrlPairs
+	return itemUrlPairs # Return the links!
 
 
 # All the pixiv-side magic
@@ -358,6 +375,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 	
 	# Wait, do we need to log in first?
 	if loginNeeded:
+		tryPixivCookies(driver)
 		pixivLogin(driver)
 
 	# On their profile or something, hit their "Works" tab link
@@ -395,28 +413,24 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 		except TimeoutException:
 			driver.refresh()
 
-	# -------- COOKIES?!?!??! --------
-	#http://stackoverflow.com/questions/7854077/using-a-session-cookie-from-selenium-in-urllib2
-	cookies = None
-	# all_cookies = driver.get_cookies()
-	# for cookie in all_cookies:
-	# 	cookies[cookie["name"]]=cookie["value"]
-
 	# ------ We're now viewing works ------ Loop time! ------
-	workNumber = 0
+	workNumber = int(options.jump) - 1 # Default this equals 0, use --jump and we start at a new number
 	exhausted = False
 	while not exhausted:
 		workNumber += 1
 		urlString = ""
 		
-		# Let's grab an work title
-		workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title)
+		# Let's grab a work title
+		workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title_a)
+		if workTitleElement == None:
+			workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title_b)
+
 		if workTitleElement != None:
 			workTitle = workTitleElement.text[:25] # Limit the name to 25 characters
 		else:
 			workTitle = "image"
 
-		# Let's pretend to be a real person and click the full view option
+		# Let's pretend to be a real human and click the full view option
 		thumbNailElement = tryGrabbingElement(driver, 'css', pixiv_css_thumbnail_image)
 		if thumbNailElement != None:
 			thumbNailElement.click()
@@ -435,7 +449,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 				# Let's download it!
 				print "Attempting DL: %s" % imageName
-				imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, cookies, driver.current_url)
+				imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, request_cookies, driver.current_url)
 
 				# Click it closed
 				driver.find_element_by_css_selector(pixiv_css_original_image_close).click()
@@ -447,40 +461,35 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 				# Nagivate directly to album URL (clicking opens a new window, bad for WebDriver)
 				workURL = driver.current_url
+				albumURL = albumThumbNailElement.get_attribute('href')
 				try:
-					driver.get(albumThumbNailElement.get_attribute('href'))
+					driver.get(albumURL)
 				except TimeoutException:
 					driver.refresh()
 
 				# Grab all the image URLs
-				albumImages = pixivAlbumGrab(driver)
+				albumImages = pixivAlbumGrab(driver, albumURL)
+				# albumImages is a list of lists with [referrer url, image url]
 
 				albumSeriesNumber = 1
-				for imageUrl in albumImages:
-					urlString += imageUrl + "\n"
+				for imageUrlPair in albumImages:
+					urlString += imageUrlPair[1] + "\n"
 
 					# Grab the file extension
-					fileExtension = imageUrl[imageUrl.rfind('.'):]
+					fileExtension = imageUrlPair[1][imageUrlPair[1].rfind('.'):]
 
 					# Let's give this work a nice, long name
 					imageName = "{} - {} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
 
 					# Let's download it!
 					print "Attempting DL: %s" % imageName
-					imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, cookies, driver.current_url)
+					imageDownloader(imageUrlPair[1], outputDir + '/' + bookName, imageName, request_cookies, imageUrlPair[0])
 					albumSeriesNumber += 1 # Doing a series, add a new number
 
-					driver.back()
-					# try:
-					# 	driver.get(workURL) # Return to the work detail page
-					# except TimeoutException:
-					# 	driver.refresh()
-
-					# Return to the work detail page
-					# try:
-					# 	driver.find_element_by_css_selector(pixiv_css_return_from_album).click() 
-					# except TimeoutException:
-					# 	driver.refresh()
+				try:
+					driver.get(workURL) # Return to the work detail page
+				except TimeoutException:
+					driver.refresh()
 			else:
 				print "Wasn't an illustration or album! Maybe an animation?"
 
@@ -498,38 +507,85 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 	return [bookName, urlString]
 
 
+# -------- COOKIES?!?!??! --------
+#http://stackoverflow.com/questions/7854077/using-a-session-cookie-from-selenium-in-urllib2
+def getDriverCookies(driver):	# Load driver_cookies from driver
+	driver_cookies = driver.get_cookies()
+	print "Got cookies, cookie size = %s." % str(len(driver_cookies))
+	# print pp.pprint(driver_cookies)
+
+def addRequestCookies():	# Load request_cookies into driver_cookies
+	for cookie in driver_cookies:
+		request_cookies[cookie["name"]]=cookie["value"]
+
+	print "Loaded request cookies."
+
+def addDriverCookies(driver): # Load driver_cookies into driver
+	for cookie in driver_cookies:
+		driver.add_cookie(cookie)
+
+def loadCookiesFile(filePath):	# Load cookies file into driver_cookies
+	if isfile(filePath):
+		print 'Reading driver cookies from %s.' % filePath
+		inFile = open(filePath, 'r')
+		driver_cookies = eval(inFile.read())
+		inFile.close()
+		if len(driver_cookies) < 1:
+			print "File found, but nothing in %s." % filePath
+			return False # Got something, but it's empty
+
+		return True
+	else:
+		print "Didn't find driver cookies in %s." % filePath
+		return False
+
+def saveCookiesFile(filePath):	# Write driver_cookies to file
+	print 'Writing driver cookies to file.'
+	inFile = open(filePath, 'w')
+	inFile.write(str(driver_cookies))
+	inFile.close()
+
+def tryPixivCookies(driver):	# Attempt to load cookies from file
+	if loadCookiesFile(cookies_file_path):
+		addDriverCookies(driver) # Write driver_cookies to our driver
+		addRequestCookies() # Write driver_cookies to request_cookies
+		return True # We loaded something, maybe we're logged in?
+	else:
+		return False # We loaded nothing, no way we're logged in.
+
 # Since Pixiv's good stuff is being a login you need to log in first!
 def pixivLogin(driver):
-	userName = getenv("PIXIV_NAME")
-	passWord = getenv("PIXIV_PASS")
-	print "Using %s:%s" % (userName, passWord)
 
-	if len(userName) == 0 or len(passWord) == 0:
-		print "Hey, you need to define your Pixiv login info into the two env vars:"
-		print "$PIXIV_NAME and $PIXIV_PASS. Edit the pixiv.sh file in a text editor!"
-		quit()
+	if tryGrabbingElement(driver, 'id', pixiv_id_login_name) != None: # We're not logged in
+		userName = getenv("PIXIV_NAME")
+		passWord = getenv("PIXIV_PASS")
 
-	driver.find_element_by_id(pixiv_id_login_name).send_keys(userName)
-	driver.find_element_by_id(pixiv_id_login_pass).send_keys(passWord, Keys.RETURN)
-	
-	print "Logging in to Pixiv with %s, %s" % (userName, passWord)
+		if len(userName) == 0 or len(passWord) == 0:
+			print "Hey, you need to define your Pixiv login info into the two env vars:"
+			print "$PIXIV_NAME and $PIXIV_PASS. Edit the pixiv.sh file in a text editor!"
+			quit()
+
+		driver.find_element_by_id(pixiv_id_login_name).send_keys(userName)
+		driver.find_element_by_id(pixiv_id_login_pass).send_keys(passWord, Keys.RETURN)
+		
+		print "Logging in to Pixiv with %s" % (userName)
+		sleep(3)
+
+		# We're now logged in, let's save it.
+		getDriverCookies(driver) # Save driver cookies to driver_cookies
+		addRequestCookies() # Convert driver_cookies to request_cookies
+		saveCookiesFile(cookies_file_path) # Write new driver_cookies to file for next run
 
 
 # The main function. Starts with a string array of starting URLs.
 def imageURLCrawler(urlList):
 	# Start up Firefox
-
-	firefoxProfile = webdriver.FirefoxProfile()
+	print "Adblock xpi: %s\nAdblock profile: %s" % (adblock_xpi, profile_location)
+	firefoxProfile = webdriver.FirefoxProfile(profile_location)
 	firefoxProfile.add_extension(adblock_xpi)
+
 	# Pixiv slow loading http://stackoverflow.com/a/22406998/3120546 fix??
 	firefoxProfile.set_preference("webdriver.load.strategy", "unstable");
-	firefoxProfile.set_preference("permissions.default.image", 2);
-	# firefoxProfile.set_preference("permissions.default.script", 2);
-	# firefoxProfile.set_preference("permissions.default.stylesheet", 2);
-	firefoxProfile.set_preference("permissions.default.subdocument", 2);
-
-
-
 
 	driver = webdriver.Firefox(firefox_profile=firefoxProfile)
 	driver.implicitly_wait(10) # ?? Tries anyway if the page keeps loading after 5 sec?
@@ -645,6 +701,7 @@ parser.add_option("-g", "--gallery", help="Gallery page size", default='20', met
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
 parser.add_option("-e", "--export", help="Export directory", default='output', metavar="string")
 parser.add_option("-m", "--time", help="Put a timestamp on books", default=False, action="store_true")
+parser.add_option("-j", "--jump", help="Pixiv broke? Start at a number", default=1, metavar="integer")
 parser.add_option("-d", "--dual", help="Dual Page Mode", default=False, action="store_true")
 parser.add_option("-w", "--writeFile", help="Write URLs to file", default=False, action="store_true")
 parser.add_option("-l", "--download", help="Download images to directory", default=False, action="store_true")
