@@ -42,7 +42,12 @@ from requests import get
 
 # This will create zip/cbz files for you as an option. They are not compressed.
 
-#### XPath String Maintenance
+#### Docs
+# General Selenium/Webdriver API reference for Python
+#  http://selenium-python.readthedocs.org/en/latest/index.html
+
+
+#### XPath+CSS+ID String Maintenance
 # If things stop working. Get the plugin Firebug for Firefox, open it, navigate
 # to a page, and use the Blue-Arrow-In-Box tool to investigate an element. Click it,
 # then in list right click the hi-lited area and select "copy XPath".
@@ -61,7 +66,7 @@ pururin_xpath_gallery = "//ul[@class='gallery-list']"
 #Pixiv
 pixiv_css_user_name = "h1.user"
 pixiv_css_image_item = "li.image-item"
-pixiv_xpath_first_image_item = "//li[@class='image-item ']/a[2]"
+pixiv_xpath_first_image_item = "//li[@class='image-item '][%s]/a[2]"
 pixiv_id_login_name = "login_pixiv_id"
 pixiv_id_login_pass = "login_password"
 pixiv_id_login_submit = "login_submit"
@@ -76,13 +81,14 @@ pixiv_css_tag_badge = "span.tag-badge"
 pixiv_css_original_image = "img.original-image"
 pixiv_css_original_image_close = "span.close.ui-modal-close"
 pixiv_css_thumbnail_image = "div._layout-thumbnail.ui-modal-trigger"
-pixiv_css_album_link = "a._work.multiple"
+pixiv_css_album_link = "div[class=works_display]>a"
 pixiv_css_album_size = "span.total"
 pixiv_css_album_big = "img"
 pixiv_xpath_album_items = "/html/body/section[2]/section/div[%s]/img"
 pixiv_xpath_return_from_album = "//ul[@class='breadcrumbs']/li[3]/h1/a"
 pixiv_css_return_from_album = "ul.breadcrumbs li h1 a"
 
+#### Other globals
 #Other
 time_stamp_format = '%Y-%m-%d %H-%M-%S'
 user_agent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0"
@@ -133,7 +139,7 @@ def imageDownloader(url, directory, imageFileName="", cookie=None, referer=None)
 		imageFileName = fileNamePadder(imageFileName)
 
 	# Download the image file
-	if referer != None:
+	if referer is not None:
 		headers['referer'] = referer # Use referer to avoid 403 with Pixiv
 
 	r = get(url, headers=headers, cookies=cookie)
@@ -312,7 +318,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 					# When there are double-wide images, the site automatically shows only one image.
 					# It fails in a special way with imageUrlB == None, so if I see this, we'll side step
 					# the need to grab imageUrlB this time.
-					if imageUrlB != None:
+					if imageUrlB is not None:
 						urlString += imageUrlB + "\n"
 						pastImageUrlB = imageUrlB
 						
@@ -387,7 +393,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 	# Let's create a name for this book
 	userNameElement = tryGrabbingElement(driver, 'css', pixiv_css_user_name)
-	if userNameElement != None:
+	if userNameElement is not None:
 		userName = userNameElement.text
 	else:
 		userName = "UnknownUser"
@@ -395,7 +401,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 			options.time = True # Force the timestamp option
 
 	tagElement = tryGrabbingElement(driver, 'css', pixiv_css_tag_badge)
-	if tagElement != None:
+	if tagElement is not None:
 		tag = " - " + tagElement.text
 	else:
 		tag = ""
@@ -403,13 +409,13 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 	# Book's title is "user's name - tag"
 	bookName = userName + tag
 
-	print "Book title: %s" % bookName
+	print u"Book title: %s" % bookName
 
 	# Alrighty, time to get some images!
 	if "illust_id" not in driver.current_url:
 		# We're on their works main page, let's click their first work...
 		try:
-			driver.find_element_by_xpath(pixiv_xpath_first_image_item).click()
+			driver.find_element_by_xpath(pixiv_xpath_first_image_item % options.first).click()
 		except TimeoutException:
 			driver.refresh()
 
@@ -422,30 +428,32 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 		
 		# Let's grab a work title
 		workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title_a)
-		if workTitleElement == None:
+		if workTitleElement is None:
 			workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title_b)
 
-		if workTitleElement != None:
+		if workTitleElement is not None:
 			workTitle = workTitleElement.text[:25] # Limit the name to 25 characters
 		else:
 			workTitle = "image"
 
 		# Let's pretend to be a real human and click the full view option
 		thumbNailElement = tryGrabbingElement(driver, 'css', pixiv_css_thumbnail_image)
-		if thumbNailElement != None:
+		if thumbNailElement is not None:
 			thumbNailElement.click()
 
 			# Grab original image element. If not there, then it's an album (probably)
 			originalImageElement = tryGrabbingElement(driver, 'css', pixiv_css_original_image)
-			if originalImageElement != None:
+			if originalImageElement is not None:
 				imageUrl = originalImageElement.get_attribute('src')
 				urlString += imageUrl + "\n"
 
 				# Grab the file extension
-				fileExtension = imageUrl[imageUrl.rfind('.'):]
+				argumentQM = imageUrl.rfind('?')
+				argumentQM = None if argumentQM < 0 else argumentQM
+				fileExtension = imageUrl[imageUrl.rfind('.'):argumentQM]
 
 				# Let's give this work a nice, long name
-				imageName = "{} - {} - {}{}".format(bookName, str(workNumber).zfill(3), workTitle, fileExtension)
+				imageName = u"{} - {} - {}{}".format(bookName, str(workNumber).zfill(3), workTitle, fileExtension)
 
 				# Let's download it!
 				print "Attempting DL: %s" % imageName
@@ -457,7 +465,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 		# ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM -------
 		else:
 			albumThumbNailElement = tryGrabbingElement(driver, 'css', pixiv_css_album_link)
-			if albumThumbNailElement != None: # We're in an album!
+			if albumThumbNailElement is not None: # We're in an album!
 
 				# Nagivate directly to album URL (clicking opens a new window, bad for WebDriver)
 				workURL = driver.current_url
@@ -476,10 +484,12 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 					urlString += imageUrlPair[1] + "\n"
 
 					# Grab the file extension
-					fileExtension = imageUrlPair[1][imageUrlPair[1].rfind('.'):]
+					argumentQM = imageUrlPair[1].rfind('?')
+					argumentQM = None if argumentQM < 0 else argumentQM
+					fileExtension = imageUrlPair[1][imageUrlPair[1].rfind('.'):argumentQM]
 
 					# Let's give this work a nice, long name
-					imageName = "{} - {} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
+					imageName = u"{} - {} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
 
 					# Let's download it!
 					print "Attempting DL: %s" % imageName
@@ -495,7 +505,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 		# Move onto the next element
 		nextWorkElement = tryGrabbingElement(driver, 'css', pixiv_css_next_work)
-		if nextWorkElement != None:
+		if nextWorkElement is not None:
 			try:
 				nextWorkElement.click()
 			except TimeoutException:
@@ -556,7 +566,7 @@ def tryPixivCookies(driver):	# Attempt to load cookies from file
 # Since Pixiv's good stuff is being a login you need to log in first!
 def pixivLogin(driver):
 
-	if tryGrabbingElement(driver, 'id', pixiv_id_login_name) != None: # We're not logged in
+	if tryGrabbingElement(driver, 'id', pixiv_id_login_name) is not None: # We're not logged in
 		userName = getenv("PIXIV_NAME")
 		passWord = getenv("PIXIV_PASS")
 
@@ -641,7 +651,6 @@ def imageURLCrawler(urlList):
 			print "I don't think this link will work: %s" % startURL
 			continue # Link isn't recognized, just move onto the next
 
-
 		if bookName == "!@#$CONTINUE!@#$":
 			# Using a dumb string because I moved code from this function into pururin() way later.
 			continue # Gallery, restart the loop.
@@ -702,6 +711,7 @@ parser.add_option("-t", "--throttle", help="Seconds between pages", default='2',
 parser.add_option("-e", "--export", help="Export directory", default='output', metavar="string")
 parser.add_option("-m", "--time", help="Put a timestamp on books", default=False, action="store_true")
 parser.add_option("-j", "--jump", help="Pixiv broke? Start at a number", default=1, metavar="integer")
+parser.add_option("-f", "--first", help="Pixiv broke in a tag? Start on this item", default=1, metavar="integer")
 parser.add_option("-d", "--dual", help="Dual Page Mode", default=False, action="store_true")
 parser.add_option("-w", "--writeFile", help="Write URLs to file", default=False, action="store_true")
 parser.add_option("-l", "--download", help="Download images to directory", default=False, action="store_true")
