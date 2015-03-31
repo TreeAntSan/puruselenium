@@ -7,6 +7,7 @@ from re import sub
 from os.path import isfile, isdir, join
 from os import mkdir, makedirs, walk, getenv, getcwd
 from shutil import rmtree
+import sys
 import zipfile
 import pprint
 pp = pprint.PrettyPrinter(indent=2)
@@ -70,7 +71,6 @@ pixiv_xpath_first_image_item = "//li[@class='image-item '][%s]/a[2]"
 pixiv_id_login_name = "login_pixiv_id"
 pixiv_id_login_pass = "login_password"
 pixiv_id_login_submit = "login_submit"
-pixiv_css_image_class = "img.original-image"
 pixiv_id_album_close = "window-close"
 pixiv_css_next_work = "li.after a"
 pixiv_xpath_work_title = "//div[@class='ui-expander-target'/h1"
@@ -93,6 +93,10 @@ pixiv_css_return_from_album = "ul.breadcrumbs li h1 a"
 time_stamp_format = '%Y-%m-%d %H-%M-%S'
 user_agent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0"
 headers = {'User-Agent': user_agent}
+
+#Retries
+retries_allowed = 3
+retry_refresh = True
 
 #Cookies
 driver_cookies = []
@@ -369,9 +373,23 @@ def pixivAlbumGrab(driver, albumURL):
 	# print itemUrlPairs
 	return itemUrlPairs # Return the links!
 
+def pixivJumpFirst(url):
+	jumpPos = url.rfind('>>')	if url.rfind('>>') != -1 else None
+	firstPos = url.rfind('<<')	if url.rfind('<<') != -1 else None
+
+	# Replace default value of jump or first
+	options.jump = url[jumpPos+2:firstPos] if jumpPos > 0 else 1
+	options.first = url[firstPos+2:] if firstPos > 0 else 1
+	
+	strip = jumpPos if jumpPos is not None else firstPos
+	
+	return url[:strip]
 
 # All the pixiv-side magic
 def pixiv(driver, startURL, loginNeeded, outputDir):
+	startURL = pixivJumpFirst(startURL) # Detect re-download information
+	print "Jump-starting work @%s, first item is @%s" % (options.jump, options.first)
+
 	# Go to the starting page!
 	driver.set_page_load_timeout(15)
 	try:
@@ -408,6 +426,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 	# Book's title is "user's name - tag"
 	bookName = userName + tag
+	bookName = directoryCleaner(bookName)
 
 	print u"Book title: %s" % bookName
 
@@ -423,6 +442,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 	workNumber = int(options.jump) - 1 # Default this equals 0, use --jump and we start at a new number
 	exhausted = False
 	while not exhausted:
+		mightBeLastPage = True
 		workNumber += 1
 		urlString = ""
 		
@@ -454,13 +474,17 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 				# Let's give this work a nice, long name
 				imageName = u"{} - {} - {}{}".format(bookName, str(workNumber).zfill(3), workTitle, fileExtension)
+				imageName = directoryCleaner(imageName)
 
 				# Let's download it!
-				print "Attempting DL: %s" % imageName
+				sys.stdout.write("Attempting DL: %s..." % imageName)
 				imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, request_cookies, driver.current_url)
+				print "Done!"
 
 				# Click it closed
 				driver.find_element_by_css_selector(pixiv_css_original_image_close).click()
+			else:
+				print "Was on a normal work page but I couldn't find \"%s\"" % pixiv_css_original_image
 
 		# ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM -------
 		else:
@@ -490,12 +514,14 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 					# Let's give this work a nice, long name
 					imageName = u"{} - {} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
+					imageName = directoryCleaner(imageName)
 
 					# Let's download it!
-					print "Attempting DL: %s" % imageName
+					sys.stdout.write("Attempting DL: %s..." % imageName)
 					imageDownloader(imageUrlPair[1], outputDir + '/' + bookName, imageName, request_cookies, imageUrlPair[0])
+					print " Done!"
 					albumSeriesNumber += 1 # Doing a series, add a new number
-
+					
 				try:
 					driver.get(workURL) # Return to the work detail page
 				except TimeoutException:
@@ -504,15 +530,33 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 				print "Wasn't an illustration or album! Maybe an animation?"
 
 		# Move onto the next element
-		nextWorkElement = tryGrabbingElement(driver, 'css', pixiv_css_next_work)
-		if nextWorkElement is not None:
-			try:
-				nextWorkElement.click()
-			except TimeoutException:
-				driver.refresh()
-		else:
+		retriesLeft = retries_allowed	# Grab global setting of allowed retries
+
+		while retriesLeft+1 != 0 and mightBeLastPage:
+			nextWorkElement = tryGrabbingElement(driver, 'css', pixiv_css_next_work)
+			
+			if nextWorkElement is not None: # Success :)
+				try:
+					nextWorkElement.click()
+					mightBeLastPage = False
+				except TimeoutException:
+					# Thought it might be ready, but didn't work!
+					print "Retrying to find the next work button. %s retries left..." % retriesLeft
+					retriesLeft -= 1 # One retry taken!
+					if retry_refresh:	# If we're serious, we can try refreshing...
+						driver.refresh()
+
+			else: 													# Failed :(
+				# Wasn't there, didn't work.
+				print "Retrying to find the next work button. %s retries left..." % retriesLeft
+				retriesLeft -= 1 # One retry taken!
+				if retry_refresh:	# If we're serious, we can try refreshing...
+					driver.refresh()
+
+		if mightBeLastPage:
+			# Retries exhausted, maybe we really have hit the end of the book...
 			print "Reached the end of Pixiv Book: \"%s\"" % bookName
-			exhausted = True # End this loop, we've reached the end of the collection
+			exhaustion = True
 
 	return [bookName, urlString]
 
@@ -524,15 +568,18 @@ def getDriverCookies(driver):	# Load driver_cookies from driver
 	print "Got cookies, cookie size = %s." % str(len(driver_cookies))
 	# print pp.pprint(driver_cookies)
 
+
 def addRequestCookies():	# Load request_cookies into driver_cookies
 	for cookie in driver_cookies:
 		request_cookies[cookie["name"]]=cookie["value"]
 
 	print "Loaded request cookies."
 
+
 def addDriverCookies(driver): # Load driver_cookies into driver
 	for cookie in driver_cookies:
 		driver.add_cookie(cookie)
+
 
 def loadCookiesFile(filePath):	# Load cookies file into driver_cookies
 	if isfile(filePath):
@@ -549,11 +596,13 @@ def loadCookiesFile(filePath):	# Load cookies file into driver_cookies
 		print "Didn't find driver cookies in %s." % filePath
 		return False
 
+
 def saveCookiesFile(filePath):	# Write driver_cookies to file
 	print 'Writing driver cookies to file.'
 	inFile = open(filePath, 'w')
 	inFile.write(str(driver_cookies))
 	inFile.close()
+
 
 def tryPixivCookies(driver):	# Attempt to load cookies from file
 	if loadCookiesFile(cookies_file_path):
@@ -562,6 +611,7 @@ def tryPixivCookies(driver):	# Attempt to load cookies from file
 		return True # We loaded something, maybe we're logged in?
 	else:
 		return False # We loaded nothing, no way we're logged in.
+
 
 # Since Pixiv's good stuff is being a login you need to log in first!
 def pixivLogin(driver):

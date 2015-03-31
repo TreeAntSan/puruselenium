@@ -17,8 +17,9 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from os import getcwd
+from os import getcwd, getenv
 from time import sleep
+import sys
 
 googleImageCss = "img#hplogo"
 
@@ -63,4 +64,144 @@ def thing():
 	# driver.send_keys(fullSavePath)
 	# driver.send_keys(Keys.RETURN)
 	# driver.send_keys(Keys.RETURN)
-thing()
+
+
+def pixivLogin(driver):
+	userName = getenv("PIXIV_NAME")
+	passWord = getenv("PIXIV_PASS")
+	print "Using %s:%s" % (userName, passWord)
+
+	if len(userName) == 0 or len(passWord) == 0:
+		print "Hey, you need to define your Pixiv login info into the two env vars:"
+		print "$PIXIV_NAME and $PIXIV_PASS. Edit the pixiv.sh file in a text editor!"
+		quit()
+	pixiv_id_login_name = "login_pixiv_id"
+	pixiv_id_login_pass = "login_password"
+	driver.find_element_by_id(pixiv_id_login_name).send_keys(userName)
+	driver.find_element_by_id(pixiv_id_login_pass).send_keys(passWord, Keys.RETURN)
+	
+	print "Logging in to Pixiv with %s, %s" % (userName, passWord)
+
+def pixivtest():
+
+	pixiv_xpath_first_image_item = "//li[@class='image-item ']/a[1]"
+	# pixiv_xpath_work_title = "//div[@class='ui-expander-target']/h1"
+	pixiv_xpath_work_title = "/html/body/div[6]/div[2]/div[1]/div/section[1]/div/h1"
+	pixiv_css_work_title = "div[class=ui-expander-target]>h1[class^=title]"
+
+	driver = webdriver.Firefox()
+	driver.get("http://www.pixiv.net/member_illust.php?id=438303")
+	pixivLogin(driver)
+	driver.find_element_by_css_selector(pixiv_xpath_first_image_item).click()
+
+	
+	title = driver.find_element_by_id(pixiv_css_work_title)
+	print title.text
+
+# thing()
+# pixivtest()
+
+def pixivJumpLink(url):
+	jumpPos = url.rfind('>>')	if url.rfind('>>') != -1 else None
+	firstPos = url.rfind('<<')	if url.rfind('<<') != -1 else None
+
+
+	jumpNum = url[jumpPos+2:firstPos] if jumpPos > 0 else None
+	firstNum = url[firstPos+2:] if firstPos > 0 else None
+	
+	strip = jumpPos if jumpPos is not None else firstPos
+	print "\noriginal: %s" % url
+	print   "stripped: %s\n" % url[:strip]
+	print "jump: %s" % jumpNum
+	print "first: %s" % firstNum
+	
+	
+
+fullLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23<<3"
+jumpLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23"
+startLink = "http://www.pixiv.net/member_illust.php?id=XXXX<<3"
+normalLink = "http://www.pixiv.net/member_illust.php?id=XXXX"
+
+# pixivJumpLink(fullLink)
+# pixivJumpLink(jumpLink)
+# pixivJumpLink(startLink)
+# pixivJumpLink(normalLink)
+
+def loop(retriesAllowed, triesNeeded, pagesTotal):
+	
+	page = 1	# virtual
+	tries = 1	# virtual
+	exhaustion = False
+
+	while not exhaustion:
+		retriesLeft = retriesAllowed
+		mightBeLastPage = True
+		print "-------SECRET PAGE ACTIVITY THAT NEEDS TO RUN"
+
+
+
+		# print "trying page %s" % str(page)
+		while retriesLeft+1 != 0 and mightBeLastPage:
+			print "try page#%s attempt #%s" % (page, tries)
+
+			# SECRET END OF BOOK LOGIC
+			if page > pagesTotal:
+				triesNeeded = 999; # Absolute end
+
+
+			# SUCCESS
+			if tries == triesNeeded: # Secret trigger that makes it work
+				print "successful on page #%s, triesNeeded=%s" % (page,triesNeeded)
+				# retriesLeft = retriesAllowed # Reset retries
+				page += 1 # Click next page
+				tries = 1 # Reset tries for next page
+				sleep(1)
+				mightBeLastPage = False
+
+			# FAILED
+			else:
+
+				sleep(1)
+				print "failed on page #%s" % page
+				print "retries left: %s" % retriesLeft
+				retriesLeft -= 1 # Close to giving up
+				tries += 1 # Getting closer
+				# continue
+
+		if mightBeLastPage:
+			sys.stdout.write("true exhaustion")
+			exhaustion = True
+	print('->exit')
+
+
+	# while not exhaustion:
+	# 	# print "trying page %s" % str(page)
+	# 	while retriesLeft+1 != 0:
+	# 		print "try page#%s attempt #%s" % (page, tries)
+
+	# 		# SUCCESS
+	# 		if tries == triesNeeded: # Secret trigger that makes it work
+	# 			if page < pagesTotal: # Really the end, for real.
+	# 				print "successful on page #%s, triesNeeded=%s" % (page,triesNeeded)
+	# 				retriesLeft = retriesAllowed # Reset retries
+	# 				page += 1 # Click next page
+	# 				tries = 1 # Reset tries for next page
+	# 				sleep(1)
+	# 			else:
+	# 				break # Really done
+
+	# 		# FAILED
+	# 		else:
+
+	# 			sleep(1)
+	# 			print "failed on page #%s" % page
+	# 			print "retries left: %s" % retriesLeft
+	# 			retriesLeft -= 1 # Close to giving up
+	# 			tries += 1 # Getting closer
+	# 			continue
+
+	# 	sys.stdout.write("true exhaustion")
+	# 	exhaustion = True
+	# print('->exit')
+
+loop(3, 3, 3)
