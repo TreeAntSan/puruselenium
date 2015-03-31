@@ -351,6 +351,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 def pixivAlbumGrab(driver, albumURL):
 	albumURL = albumURL.replace('manga', 'manga_big') + '&page='	# Get the full page link
  	albumSize = int(driver.find_element_by_css_selector(pixiv_css_album_size).text)
+ 	print "Grabbing URLs: There should be %s images in this album..." % albumSize
 
 	itemUrlPairs = []
 	albumExhausted = False
@@ -359,36 +360,46 @@ def pixivAlbumGrab(driver, albumURL):
 		driver.get(albumImageLargeURL)
 
 		itemUrlPairs.append([albumImageLargeURL, driver.find_element_by_css_selector(pixiv_css_album_big).get_attribute('src')])
-		# try:
-		# 	itemElement = driver.find_element_by_xpath((pixiv_xpath_album_items % albumItemNumber))
-		# 	itemElement.click() # Be like a normal human and click each image
-		# 	itemUrls.append(itemElement.get_attribute('href')) # Grab this item's URL
-		# except NoSuchElementException:
-		# 	break # Stop, we've hit the end
-
-	# try:
-	# 	driver.find_element_by_id(pixiv_id_album_close).click() # Leave the album
-	# except TimeoutException:
-	# 	driver.refresh()
-	# print itemUrlPairs
 	return itemUrlPairs # Return the links!
 
-def pixivJumpFirst(url):
-	jumpPos = url.rfind('>>')	if url.rfind('>>') != -1 else None
-	firstPos = url.rfind('<<')	if url.rfind('<<') != -1 else None
 
-	# Replace default value of jump or first
-	options.jump = url[jumpPos+2:firstPos] if jumpPos > 0 else 1
-	options.first = url[firstPos+2:] if firstPos > 0 else 1
+# Jump is the jump in the grand-count of this user's works. If a user has 200 works, then it'll be 1-200.
+#		If you want to start counting again from a certain number (such as 201) write >>201
+# First is the first link on a work's overview page. If you want to resume your DL on the 9th image
+# 	viewable on the page, then set <<9
+# Limit is the limit of works you wanna download. Say you return to a user after downloading 20 works.
+#		They just released two new works, and you want those two new ones. Well, write >>21||2 and it'll
+#		download the first two items and make them #21 and #22 and stop there.
+def pixivDownloadConfig(url):
+	jumpPos = url.rfind('>>') if url.rfind('>>') != -1 else None
+	firstPos = url.rfind('<<') if url.rfind('<<') != -1 else None
+	limitPos = url.rfind('||') if url.rfind('||') != -1 else None
+	global redownload_jump
+	global redownload_first
+	global redownload_limit
+	redownload_jump = int(url[jumpPos+2:firstPos or limitPos]) if jumpPos > 0 else 1 # Default to 1
+	redownload_first = int(url[firstPos+2:limitPos]) if firstPos > 0 else 1 # Default to 1
+	redownload_limit = int(url[limitPos+2:]) if limitPos > 0 else 0 # Default to 1
 	
-	strip = jumpPos if jumpPos is not None else firstPos
-	
+	strip = None
+	if jumpPos is not None:
+		strip = jumpPos
+	elif firstPos is not None:
+		strip = firstPos
+	elif limitPos is not None:
+		strip = limitPos
+
 	return url[:strip]
 
 # All the pixiv-side magic
 def pixiv(driver, startURL, loginNeeded, outputDir):
-	startURL = pixivJumpFirst(startURL) # Detect re-download information
-	print "Jump-starting work @%s, first item is @%s" % (options.jump, options.first)
+	startURL = pixivDownloadConfig(startURL) # Detect re-download information
+	if redownload_jump != 1:
+		print "->Jump count @%s" % redownload_jump
+	if redownload_first != 1:
+		print "->First work @%s" % redownload_first
+	if redownload_limit != 0:
+		print "->Limit work @%s" % redownload_limit
 
 	# Go to the starting page!
 	driver.set_page_load_timeout(15)
@@ -434,18 +445,24 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 	if "illust_id" not in driver.current_url:
 		# We're on their works main page, let's click their first work...
 		try:
-			driver.find_element_by_xpath(pixiv_xpath_first_image_item % options.first).click()
+			driver.find_element_by_xpath(pixiv_xpath_first_image_item % redownload_first).click()
 		except TimeoutException:
 			driver.refresh()
 
 	# ------ We're now viewing works ------ Loop time! ------
-	workNumber = int(options.jump) - 1 # Default this equals 0, use --jump and we start at a new number
+	workNumber = redownload_jump - 1 # Default this equals 0, use --jump and we start at a new number
 	exhausted = False
 	while not exhausted:
+		workURL = None
 		mightBeLastPage = True
 		workNumber += 1
 		urlString = ""
 		
+		if redownload_limit != 0:
+			if workNumber > redownload_limit + (redownload_jump - 1):
+				print "We reached the end of a limited job of %s works." % redownload_limit
+				break # Breaks the 'exhausted' loop, effectively going straight to this function's return.
+
 		# Let's grab a work title
 		workTitleElement = tryGrabbingElement(driver, 'css', pixiv_css_work_title_a)
 		if workTitleElement is None:
@@ -477,9 +494,8 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 				imageName = directoryCleaner(imageName)
 
 				# Let's download it!
-				sys.stdout.write("Attempting DL: %s..." % imageName)
+				print "Attempting DL: %s..." % imageName
 				imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, request_cookies, driver.current_url)
-				print "Done!"
 
 				# Click it closed
 				driver.find_element_by_css_selector(pixiv_css_original_image_close).click()
@@ -500,6 +516,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 					driver.refresh()
 
 				# Grab all the image URLs
+				print "Grabbing URLs: %s... " % (u"{} - {} - {}".format(bookName, str(workNumber).zfill(3), workTitle))
 				albumImages = pixivAlbumGrab(driver, albumURL)
 				# albumImages is a list of lists with [referrer url, image url]
 
@@ -517,9 +534,8 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 					imageName = directoryCleaner(imageName)
 
 					# Let's download it!
-					sys.stdout.write("Attempting DL: %s..." % imageName)
+					print "Attempting DL: %s..." % imageName
 					imageDownloader(imageUrlPair[1], outputDir + '/' + bookName, imageName, request_cookies, imageUrlPair[0])
-					print " Done!"
 					albumSeriesNumber += 1 # Doing a series, add a new number
 					
 				try:
@@ -543,8 +559,14 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 					# Thought it might be ready, but didn't work!
 					print "Retrying to find the next work button. %s retries left..." % retriesLeft
 					retriesLeft -= 1 # One retry taken!
+
 					if retry_refresh:	# If we're serious, we can try refreshing...
-						driver.refresh()
+						if workURL is not None:
+							print "Trying returning to workURL %s" % workURL
+							driver.get(workURL)	# Album failure, more effective to re-get workURL
+						else:
+							print "Trying refresh of current page %s" % driver.current_url
+							driver.refresh()
 
 			else: 													# Failed :(
 				# Wasn't there, didn't work.
@@ -555,9 +577,9 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 		if mightBeLastPage:
 			# Retries exhausted, maybe we really have hit the end of the book...
-			print "Reached the end of Pixiv Book: \"%s\"" % bookName
 			exhaustion = True
 
+	print "Reached the end of Pixiv Book: \"%s\"" % bookName
 	return [bookName, urlString]
 
 
@@ -760,8 +782,6 @@ parser.add_option("-g", "--gallery", help="Gallery page size", default='20', met
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
 parser.add_option("-e", "--export", help="Export directory", default='output', metavar="string")
 parser.add_option("-m", "--time", help="Put a timestamp on books", default=False, action="store_true")
-parser.add_option("-j", "--jump", help="Pixiv broke? Start at a number", default=1, metavar="integer")
-parser.add_option("-f", "--first", help="Pixiv broke in a tag? Start on this item", default=1, metavar="integer")
 parser.add_option("-d", "--dual", help="Dual Page Mode", default=False, action="store_true")
 parser.add_option("-w", "--writeFile", help="Write URLs to file", default=False, action="store_true")
 parser.add_option("-l", "--download", help="Download images to directory", default=False, action="store_true")

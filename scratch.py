@@ -117,10 +117,10 @@ def pixivJumpLink(url):
 	
 	
 
-fullLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23<<3"
-jumpLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23"
-startLink = "http://www.pixiv.net/member_illust.php?id=XXXX<<3"
-normalLink = "http://www.pixiv.net/member_illust.php?id=XXXX"
+# fullLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23<<3"
+# jumpLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23"
+# startLink = "http://www.pixiv.net/member_illust.php?id=XXXX<<3"
+# normalLink = "http://www.pixiv.net/member_illust.php?id=XXXX"
 
 # pixivJumpLink(fullLink)
 # pixivJumpLink(jumpLink)
@@ -204,4 +204,53 @@ def loop(retriesAllowed, triesNeeded, pagesTotal):
 	# 	exhaustion = True
 	# print('->exit')
 
-loop(3, 3, 3)
+# loop(3, 3, 3)
+
+
+
+
+def pixivDownloadConfig(url):
+	jumpPos = url.rfind('>>') if url.rfind('>>') != -1 else None
+	firstPos = url.rfind('<<') if url.rfind('<<') != -1 else None
+	limitPos = url.rfind('||') if url.rfind('||') != -1 else None
+
+	# Replace default value of jump or first
+	redownload_jump = url[jumpPos+2:firstPos or limitPos] if jumpPos > 0 else 1 # Default to 1
+	redownload_first = url[firstPos+2:limitPos] if firstPos > 0 else 1 # Default to 1
+	work_limit = url[limitPos+2:] if limitPos > 0 else 0 # Default to 1
+	
+	strip = None
+	if jumpPos is not None:
+		strip = jumpPos
+	elif firstPos is not None:
+		strip = firstPos
+	elif limitPos is not None:
+		strip = limitPos
+	
+	print "\noriginal: %s" % url
+	print   "stripped: %s" % url[:strip]
+	print "jump: %s, first: %s, limit: %s" % (redownload_jump, redownload_first, work_limit)
+
+	return url[:strip]
+
+fullLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23<<3||25"
+
+jumpLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23"
+jumpLimitLink = "http://www.pixiv.net/member_illust.php?id=XXXX>>23||25"
+
+startLink = "http://www.pixiv.net/member_illust.php?id=XXXX<<3"
+startLimitLink = "http://www.pixiv.net/member_illust.php?id=XXXX<<3||25"
+
+limitLink = "http://www.pixiv.net/member_illust.php?id=XXXX||25"
+normalLink = "http://www.pixiv.net/member_illust.php?id=XXXX"
+
+pixivDownloadConfig(fullLink)
+
+pixivDownloadConfig(jumpLink)
+pixivDownloadConfig(jumpLimitLink)
+
+pixivDownloadConfig(startLink)
+pixivDownloadConfig(startLimitLink)
+
+pixivDownloadConfig(limitLink)
+pixivDownloadConfig(normalLink)
