@@ -66,14 +66,10 @@ pururin_xpath_gallery = "//ul[@class='gallery-list']"
 
 #Pixiv
 pixiv_css_user_name = "h1.user"
-pixiv_css_image_item = "li.image-item"
 pixiv_xpath_first_image_item = "//li[@class='image-item '][%s]/a[2]"
 pixiv_id_login_name = "login_pixiv_id"
 pixiv_id_login_pass = "login_password"
-pixiv_id_login_submit = "login_submit"
-pixiv_id_album_close = "window-close"
 pixiv_css_next_work = "li.after a"
-pixiv_xpath_work_title = "//div[@class='ui-expander-target'/h1"
 pixiv_css_work_title_a = "div[class=ui-expander-target]>h1[class^=title]"
 pixiv_css_work_title_b = "section[class=work-info]>h1[class^=title]"
 pixiv_css_work_tab = "a.tab-works"
@@ -84,9 +80,6 @@ pixiv_css_thumbnail_image = "div._layout-thumbnail.ui-modal-trigger"
 pixiv_css_album_link = "div[class=works_display]>a"
 pixiv_css_album_size = "span.total"
 pixiv_css_album_big = "img"
-pixiv_xpath_album_items = "/html/body/section[2]/section/div[%s]/img"
-pixiv_xpath_return_from_album = "//ul[@class='breadcrumbs']/li[3]/h1/a"
-pixiv_css_return_from_album = "ul.breadcrumbs li h1 a"
 
 #### Other globals
 #Other
