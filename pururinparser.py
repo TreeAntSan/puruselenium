@@ -111,7 +111,7 @@ adblock_xpi = getcwd() + '/adblock.xpi'
 profile_location = getcwd() + '/profilemodel'
 
 
-# Grab an element that may not be there 
+# Grab an element that may not be there
 def tryGrabbingElement(driver, elementType, elementAddress):
 	try:
 		if elementType == 'css':
@@ -189,7 +189,7 @@ def tagListGrabber(desiredTagName, driver):
 
 
 # If you give a gallery page in the url, this will parse all the books on the gallery page
-# and spit them all back out in a simple list. 
+# and spit them all back out in a simple list.
 # If it didn't work, returns an empty list!
 def galleryGrab(driver):
 	try:
@@ -219,10 +219,10 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 	galleryLinks = galleryGrab(driver)
 	if len(galleryLinks) > 0:
 		print "That last link was a gallery! %s books were found:" % len(galleryLinks)
-		
+
 		# Some fuckin' fancy footwork here. In-place alter to print out book titles from html links
 		print capwords(replace(', '.join([bookUrl[bookUrl.rfind('/')+1:bookUrl.rfind('.html')] for bookUrl in galleryLinks]), '-', ' '))
-		
+
 		# Insert the new books after the gallery link (must keep it to keep place)
 		urlList[bookNumber:bookNumber] = galleryLinks
 
@@ -258,7 +258,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 				break	# It worked! Break from the loop.
 			except NoSuchElementException:
 				sleep(1) # It didn't work! Rest for a second
-		
+
 	pageLimit = int(options.pageLimit)
 
 	urlString = ""
@@ -270,16 +270,16 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 
 		imageUrlA = ""
 		imageUrlB = ""
-		
+
 		# Deal with the image element
 		try:
 			imageElementA = driver.find_element_by_xpath(pururin_xpath_imageElementA)
 			imageUrlA = imageElementA.get_attribute('src')
-			
+
 			if imageUrlA != pastImageUrlA and imageUrlA != pastImageUrlB:
 				urlString += imageUrlA + "\n"
 				pastImageUrlA = imageUrlA
-				
+
 				# Name the book from the last '/'+1 to the last '-'
 				if bookName == "ERROR_BLANK_BOOK_NAME":
 					bookName = imageUrlA[imageUrlA.rfind('/')+1:imageUrlA.rfind('-')]
@@ -300,7 +300,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 
 				# Download imageUrlA
 				if options.download or options.zip or options.cbz:
-					imageDownloader(imageUrlA, outputDir + '/' + bookName)
+					imageDownloader(imageUrlA, outputDir + '/' + bookName, "", None, driver.current_url)
 
 				print imageUrlA
 
@@ -325,10 +325,10 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 					if imageUrlB is not None:
 						urlString += imageUrlB + "\n"
 						pastImageUrlB = imageUrlB
-						
+
 						# Download imageUrlB
 						if options.download or options.zip or options.cbz:
-							imageDownloader(imageUrlB, outputDir + '/' + bookName)
+							imageDownloader(imageUrlB, outputDir + '/' + bookName, "", None, driver.current_url)
 
 						print imageUrlB
 					else:
@@ -344,7 +344,8 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 		nextPageButton = driver.find_element_by_xpath(pururin_xpath_nextPageButton)
 		nextPageButton.click()
 
-		return [bookName, urlString]
+	print "Done with %s" % bookName
+	return [bookName, urlString]
 
 
 # Pixiv album parser, returns array of image URLs
@@ -380,7 +381,7 @@ def pixivDownloadConfig(url):
 	redownload_jump = int(url[jumpPos+2:firstPos or limitPos]) if jumpPos > 0 else 1 # Default to 1
 	redownload_first = int(url[firstPos+2:limitPos]) if firstPos > 0 else 1 # Default to 1
 	redownload_limit = int(url[limitPos+2:]) if limitPos > 0 else 0 # Default to 1
-	
+
 	strip = None
 	if jumpPos is not None:
 		strip = jumpPos
@@ -407,7 +408,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 		driver.get(startURL)
 	except TimeoutException:
 		driver.refresh()
-	
+
 	# Wait, do we need to log in first?
 	if loginNeeded:
 		tryPixivCookies(driver)
@@ -457,7 +458,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 		mightBeLastPage = True
 		workNumber += 1
 		urlString = ""
-		
+
 		if redownload_limit != 0:
 			if workNumber > redownload_limit + (redownload_jump - 1):
 				print "We reached the end of a limited job of %s works." % redownload_limit
@@ -537,7 +538,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 					print "Attempting DL: %s..." % imageName
 					imageDownloader(imageUrlPair[1], outputDir + '/' + bookName, imageName, request_cookies, imageUrlPair[0])
 					albumSeriesNumber += 1 # Doing a series, add a new number
-					
+
 				try:
 					driver.get(workURL) # Return to the work detail page
 				except TimeoutException:
@@ -550,7 +551,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
 		while retriesLeft+1 != 0 and mightBeLastPage:
 			nextWorkElement = tryGrabbingElement(driver, 'css', pixiv_css_next_work)
-			
+
 			if nextWorkElement is not None: # Success :)
 				try:
 					nextWorkElement.click()
@@ -649,7 +650,7 @@ def pixivLogin(driver):
 
 		driver.find_element_by_id(pixiv_id_login_name).send_keys(userName)
 		driver.find_element_by_id(pixiv_id_login_pass).send_keys(passWord, Keys.RETURN)
-		
+
 		print "Logging in to Pixiv with %s" % (userName)
 		sleep(3)
 
@@ -710,7 +711,7 @@ def imageURLCrawler(urlList):
 
 		# A Pururin Link!
 		if 'pururin' in startURL:
-			returned = pururin(driver, startURL, urlList, outputDir, bookNumber)[0]
+			returned = pururin(driver, startURL, urlList, outputDir, bookNumber)
 			bookName = returned[0]
 			urlString = returned[1]
 
@@ -727,10 +728,6 @@ def imageURLCrawler(urlList):
 			# Using a dumb string because I moved code from this function into pururin() way later.
 			continue # Gallery, restart the loop.
 
-		# If -m is on, then add a timestamp to the book's name
-		if options.time:
-			bookName += ' ' + datetime.fromtimestamp(time()).strftime(time_stamp_format)
-		
 
 		### End of loop for this gallery
 		# Write the archive file.
@@ -765,7 +762,7 @@ def imageURLCrawler(urlList):
 			outfile.close()
 			print "Wrote to file \"%s\"" % (outputDir + '/' + bookName + ".txt")
 
-		
+
 		sleep(int(options.throttle)*2)
 
 
@@ -781,7 +778,6 @@ parser.add_option("-n", "--pageLimit", help="Only download n pages", default='99
 parser.add_option("-g", "--gallery", help="Gallery page size", default='20', metavar="integer")
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
 parser.add_option("-e", "--export", help="Export directory", default='output', metavar="string")
-parser.add_option("-m", "--time", help="Put a timestamp on books", default=False, action="store_true")
 parser.add_option("-d", "--dual", help="Dual Page Mode", default=False, action="store_true")
 parser.add_option("-w", "--writeFile", help="Write URLs to file", default=False, action="store_true")
 parser.add_option("-l", "--download", help="Download images to directory", default=False, action="store_true")
