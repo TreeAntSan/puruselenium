@@ -220,7 +220,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 		urlList[bookNumber:bookNumber] = galleryLinks
 
 		# Start the loop over again, but this time with an updated urlList
-		return "!@#$CONTINUE!@#$"
+		return ["!@#$CONTINUE!@#$",""]
 
 	# Attempt to grab the artist name if we're on the correct gallery page.
 	artistName = tagListGrabber('artist', driver)
