@@ -27,6 +27,8 @@ def imageDownloader(url, directory, referer=None):
 		makedirs(directory)
 
 	imageFileName = url[url.rfind('/')+1:url.rfind('?')]
+	if referer is not None:
+		imageFileName = referer[referer.rfind('=')+1:].zfill(4) + '_' + imageFileName
 	headers = {}
 
 	# Download the image file
