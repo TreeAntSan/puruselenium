@@ -4,8 +4,8 @@ from time import sleep, time
 from datetime import datetime
 from string import split, capwords, replace, find, lower, strip
 from re import sub
-from os.path import isfile, isdir, join
-from os import mkdir, makedirs, walk, getenv, getcwd
+from os.path import isfile, isdir, join, realpath, dirname
+from os import mkdir, makedirs, walk, getenv
 from shutil import rmtree
 import sys
 import zipfile
@@ -86,6 +86,7 @@ pixiv_css_album_big = "img"
 time_stamp_format = '%Y-%m-%d %H-%M-%S'
 user_agent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0"
 headers = {'User-Agent': user_agent}
+current_directory = dirname(realpath(__file__))
 
 #Retries
 retries_allowed = 3
@@ -94,14 +95,14 @@ retry_refresh = True
 #Cookies
 driver_cookies = []
 request_cookies = []
-cookies_file_path = getcwd() + '/cookies'
+cookies_file_path = current_directory + '/cookies'
 
 #AdBlockPlus
 # Using a adblock plus v2.6.6.3876 load trick with custom adblock.xpi (with modified ui.js file)
 # http://stackoverflow.com/q/20832159/3120546
 # Pixiv otherwise takes FOREVER with terrible ads from Japanese servers that seldom load quickly
-adblock_xpi = getcwd() + '/adblock.xpi'
-profile_location = getcwd() + '/profilemodel'
+adblock_xpi = current_directory + '/adblock.xpi'
+profile_location = current_directory + '/profilemodel'
 
 
 # Grab an element that may not be there
@@ -139,6 +140,7 @@ def imageDownloader(url, directory, imageFileName="", cookie=None, referer=None)
 	if referer is not None:
 		headers['referer'] = referer # Use referer to avoid 403 with Pixiv
 
+	print "Getting this url now: %s" % url
 	r = get(url, headers=headers, cookies=cookie)
 
 	# Write the image file
