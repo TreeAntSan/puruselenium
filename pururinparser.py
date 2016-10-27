@@ -28,10 +28,11 @@ from requests import get
 # 0) Get Python 3 and use Linux (try an Ubuntu VM!) or MacOS.
 # 1) Install virtualenv if you don't have it. https://virtualenv.pypa.io/en/stable/
 # 2) Run `virtualenv -p python3 venv`
+#    Note: To leave the virtual environment type `deactivate`
 # 3) Run `source ./venv/bin/activate` ; you should see (venv) at the start of your terminal
 # 4) Run `pip install -r requirements.txt`
-# 5) To leave the virtual environment type `deactivate`
-# 6) Download geckodriver https://github.com/mozilla/geckodriver/releases and put it in your bin
+# 5) Download geckodriver https://github.com/mozilla/geckodriver/releases and put it in your bin
+# You can test to see if things work by running `python test.py`
 
 # Example execution to a directory named ./downloads with a txt file of book urls ./downloads.txt
 # python pururinparser.py -t 1 -c -e ./downloads -i ./downloads.txt
@@ -68,9 +69,13 @@ pururin_xpath_imageElement = '//a[@class="image-next"]/img'
 pururin_xpath_nextPageButton = "//a[@class='square link-next image-next']"
 pururin_xpath_galleryFirstPage = "//i[@class='fa fa-book']"
 pururin_xpath_tableInfo = "//table[@class='table-info']"
+pururin_xpath_tableInfo_sub = "/tbody/tr[{}]/td[{}]{}"
 pururin_xpath_gallery = "//ul[@class='gallery-list']"
 pururin_xpath_gallery_sub = "/li[{}]/div/a"
 pururin_xpath_book_name = "//h1[@class='otitle']"
+pururin_xpath_gallery_pages = "//div[@class='pager jumper']"
+pururin_xpath_gallery_pages_sub = "/a[{}]"
+pururin_xpath_gallery_pages_first = "/span"
 
 #Pixiv
 pixiv_css_user_name = "h1.user"
@@ -187,7 +192,7 @@ def createArchive(directory, zip):
 def tagListGrabber(desiredTagName, driver):
   for x in range(1,20): # Try up to 19 elements
     try:
-      xpath_tagCheck = pururin_xpath_tableInfo + '/tbody/tr[{}]/td[{}]{}'
+      xpath_tagCheck = pururin_xpath_tableInfo + pururin_xpath_tableInfo_sub
       tagElement = driver.find_element_by_xpath(xpath_tagCheck.format(x, '1', ''))
       if tagElement.text.lower().find(desiredTagName.lower()) != -1:
         tagValueElement = driver.find_element_by_xpath(xpath_tagCheck.format(x, '2', '/ul/li/a'))
@@ -207,7 +212,7 @@ def bookNameGrabber(driver):
     bookName = bookNameElement.text.split(' / ')[0] # Split on / (Japanese name)
 
     bookNameSplit = bookName.split(' | ') # Split on Romanji title | English translation
-    if len(bookNameSplit == 2):
+    if len(bookNameSplit) == 2:
       return bookNameSplit[1]
     else:
       return bookName
@@ -219,12 +224,41 @@ def bookNameGrabber(driver):
 # and spit them all back out in a simple list.
 # If it didn't work, returns an empty list!
 def galleryGrab(driver):
+
+  newLinks = []
+  extraPages = 0
+
+  # Grab gallery page links (galleries with multiple pages)
   try:
-    galleryElement = driver.find_element_by_xpath(pururin_xpath_gallery)
+    driver.find_element_by_xpath(pururin_xpath_gallery_pages)
+
+    # Only grab page links from the first page. This was a crappy way to detect it.
+    firstPage = driver.find_element_by_xpath(pururin_xpath_gallery_pages + pururin_xpath_gallery_pages_first)
+
+    # Only grab the first 10 links (2 -> 11) at max.
+    if firstPage.text == '1':
+      for x in range(1, 11):
+        try:
+          xpath_pageCheck = pururin_xpath_gallery_pages + pururin_xpath_gallery_pages_sub
+          pageElement = driver.find_element_by_xpath(xpath_pageCheck.format(x))
+          newLink = pageElement.get_attribute('href') # Grab the new page url
+          newLinks.append(newLink) # Add it to the list
+          extraPages += 1
+        except NoSuchElementException:
+          if extraPages > 0:
+            print("Found {} more pages for that gallery, they'll be dl'd eventually!".format(extraPages))
+          break # Stop, we've hit the end
+
+
+  except NoSuchElementException:
+    pass # Continue...
+
+  # Grab new comics
+  try:
+    driver.find_element_by_xpath(pururin_xpath_gallery)
   except NoSuchElementException:
     return [] # Got nothing
 
-  newLinks = [] # If this is a gallery, we'll store the urls of each one!
   for x in range(1, int(options.gallery)+1): # Try elements 1->n gallery arg
     try:
       xpath_bookCheck = pururin_xpath_gallery + pururin_xpath_gallery_sub
@@ -251,6 +285,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
     print(capwords(', '.join([bookUrl[bookUrl.rfind('/')+1:bookUrl.rfind('.html')] for bookUrl in galleryLinks]).replace('-', ' ')))
 
     # Insert the new books after the gallery link (must keep it to keep place)
+    # (Book number starts at 1, not 0)
     urlList[bookNumber:bookNumber] = galleryLinks
 
     # Start the loop over again, but this time with an updated urlList
@@ -273,11 +308,11 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 
   # Add first parody to front if available (start from Gallery Page)
   if len(parodyTag) > 0:
-    bookName = parodyTag + ' - ' + bookName
+    bookName = "{} - {}".format(parodyTag, bookName)
 
   # Add the artist name to front if available (start from Gallery Page)
   if len(artistName) > 0:
-    bookName = artistName + ' - ' + bookName
+    bookName = "{} - {}".format(artistName, bookName)
 
   # Print out title to console
   print("Title: {}".format(bookName))
@@ -311,11 +346,11 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
       imageUrl = imageElement.get_attribute('src')
 
       if imageUrl != pastImageUrl:
-        urlString += imageUrl + "\n"
+        urlString += "{}\n".format(imageUrl)
         pastImageUrl = imageUrl
         # Download imageUrl
         if options.download or options.zip or options.cbz:
-          imageDownloader(imageUrl, outputDir + '/' + bookName, "", None, driver.current_url)
+          imageDownloader(imageUrl, "{}/{}".format(outputDir, bookName), "", None, driver.current_url)
 
       # Throttle the speed, otherwise Selenium will rip through pages a half-second a piece.
       sleep(int(options.throttle))
@@ -480,7 +515,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
         # Let's download it!
         print("Attempting DL: {}...".format(imageName))
-        imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, request_cookies, driver.current_url)
+        imageDownloader(imageUrl, "{}/{}".format(outputDir, bookName), imageName, request_cookies, driver.current_url)
 
         # Click it closed
         driver.find_element_by_css_selector(pixiv_css_original_image_close).click()
@@ -520,7 +555,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
           # Let's download it!
           print("Attempting DL: {}...".format(imageName))
-          imageDownloader(imageUrlPair[1], outputDir + '/' + bookName, imageName, request_cookies, imageUrlPair[0])
+          imageDownloader(imageUrlPair[1], "{}/{}".format(outputDir, bookName), imageName, request_cookies, imageUrlPair[0])
           albumSeriesNumber += 1 # Doing a series, add a new number
 
         try:
@@ -685,17 +720,16 @@ def imageURLCrawler(urlList):
   for startURL in urlList:
     bookNumber += 1
 
+    if startURL[0] == '#':
+      continue # Comment, skip!
+    if startURL == 'stop':
+      print("Stopping early due to 'stop' line!")
+      break # Stop what we're doing
     if len(startURL) == 0:
       continue # Skip blank lines
     if 'http' not in startURL and 'html' not in startURL:
       print("Hey, this URL looks broken")
-      continue
-    if '.jpg' in startURL:
-      print("Hey, you accidentally used a thumbnail!")
-      continue
-    if startURL == 'stop':
-      print("Stopping early due to 'stop' line!")
-      break # Stop what we're doing
+      continue # No http nor html? Maybe a jpg, maybe junk!
 
     print("-------\nViewing link {} of {}: {}".format(bookNumber, len(urlList), startURL))
 
@@ -729,31 +763,39 @@ def imageURLCrawler(urlList):
 
         extension = 'zip' if options.zip else 'cbz'
 
-        zipf = zipfile.ZipFile(outputDir + '/' + bookName + '.' + extension, 'w')
-        createArchive(outputDir + '/' + bookName, zipf)
+        zipf = zipfile.ZipFile("{}/{}.{}".format(outputDir, bookName, extension), 'w')
+        createArchive("{}/{}".format(outputDir, bookName), zipf)
         zipf.close()
 
-        print("Wrote archive \"{}\"".format(outputDir + '/' + bookName + '.' + extension))
+        print("Wrote archive \"{}/{}.{}\"".format(outputDir, bookName, extension))
 
         # If the download option isn't set, delete the download directory.
         if not options.download:
-          rmtree(outputDir + '/' + bookName)
+          rmtree("{}/{}".format(outputDir, bookName))
 
         else:
-          print("Wrote to directory \"{}\"".format(outputDir + '/' + bookName + '/'))
+          print("Wrote to directory \"{}/{}/\"".format(outputDir, bookName))
 
     # Write the output file.
     if options.writeFile and len(bookName) > 0:
       if not isdir(outputDir):
         mkdir(outputDir)
 
-      with open(outputDir + '/' + bookName + ".txt", 'w') as outfile:
+      with open("{}/{}.txt".format(outputDir,bookName), 'w') as outfile:
         outfile.write(urlString)
+        print("Wrote to file \"{}/{}.txt\"".format(outputDir, bookName))
 
-      print("Wrote to file \"{}\"".format(outputDir + '/' + bookName + ".txt"))
+    # Write log file of successful downloads
+    if options.dls:
+      if not isdir(outputDir):
+        mkdir(outputDir)
 
+      with open("{}/{}".format(outputDir, options.dls), 'a') as successFile:
+        successFile.write("\n{}".format(startURL))
+        print("Wrote successful dl to file \"{}/{}\"".format(outputDir, options.dls))
 
-    sleep(int(options.throttle)*2)
+    # Sleep a little bit (at least one second)
+    sleep(1 + int(options.throttle))
 
 
   ### End of urlList for loop
@@ -764,6 +806,7 @@ def imageURLCrawler(urlList):
 parser = OptionParser()
 parser.add_option("-s", "--startURL", help="The starting URL", default='', metavar="startURL")
 parser.add_option("-i", "--inputList", help="List file (\\n delimit)", default='', metavar="filename")
+parser.add_option("-d", "--dls", help="Output Successful DLs", default='successdls.txt', metavar="filename")
 parser.add_option("-n", "--pageLimit", help="Only download n pages", default='9999', metavar="integer")
 parser.add_option("-g", "--gallery", help="Gallery page size", default='20', metavar="integer")
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
