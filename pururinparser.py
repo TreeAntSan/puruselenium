@@ -771,7 +771,11 @@ def imageURLCrawler(urlList):
 
         # If the download option isn't set, delete the download directory.
         if not options.download:
-          rmtree("{}/{}".format(outputDir, bookName))
+          try:
+            rmtree("{}/{}".format(outputDir, bookName))
+          except OSError as e:
+            print("Crap, something broke when trying to delete but we'll continue on...")
+
 
         else:
           print("Wrote to directory \"{}/{}/\"".format(outputDir, bookName))
