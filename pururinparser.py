@@ -34,7 +34,7 @@ from requests import get
 # 6) Download geckodriver https://github.com/mozilla/geckodriver/releases and put it in your bin
 
 # Example execution to a directory named ./downloads with a txt file of book urls ./downloads.txt
-# python pururinparser.py -t 1 -c -e ./downloads -o ./downloads.txt
+# python pururinparser.py -t 1 -c -e ./downloads -i ./downloads.txt
 
 # The two libraries it uses is pypi Selenium, which can be found here:
 #   https://pypi.python.org/pypi/selenium
@@ -69,12 +69,12 @@ pururin_xpath_nextPageButton = "//a[@class='square link-next image-next']"
 pururin_xpath_galleryFirstPage = "//i[@class='fa fa-book']"
 pururin_xpath_tableInfo = "//table[@class='table-info']"
 pururin_xpath_gallery = "//ul[@class='gallery-list']"
-pururin_xpath_gallery_sub = "/li[%s]/div/a"
+pururin_xpath_gallery_sub = "/li[{}]/div/a"
 pururin_xpath_book_name = "//h1[@class='otitle']"
 
 #Pixiv
 pixiv_css_user_name = "h1.user"
-pixiv_xpath_first_image_item = "//li[@class='image-item '][%s]/a[2]"
+pixiv_xpath_first_image_item = "//li[@class='image-item '][{}]/a[2]"
 pixiv_id_login_name = "login_pixiv_id"
 pixiv_id_login_pass = "login_password"
 pixiv_css_next_work = "li.after a"
@@ -128,9 +128,9 @@ def tryGrabbingElement(driver, elementType, elementAddress):
 
 # Replace any potentially illegal characters with an underscore
 # These usually come from tags.
-def directoryCleaner(directory):
-  # return sub('[^\w\-_\. ]', '_', directory) # Aggresive
-  return sub('[\\\/:\*?"<>|]', '_', directory) # Relaxed
+def dirFileNameCleaner(dirfile, replacementChar = '_'):
+  # return sub('[^\w\-_\. ]', '_', dirfile) # Aggresive
+  return sub('[\\\/:\*?~"<>|]', replacementChar, dirfile) # Relaxed
 
 
 # Downloads an image and names it from a URL.
@@ -139,6 +139,7 @@ def imageDownloader(url, directory, imageFileName="", cookie=None, referer=None)
   if not isdir(directory):
     makedirs(directory)
 
+  # It assumes that the image file names are just numbers
   if len(imageFileName) == 0:
     # Parse the image name from the url
     imageFileName = url[url.rfind('/')+1:]
@@ -148,12 +149,13 @@ def imageDownloader(url, directory, imageFileName="", cookie=None, referer=None)
   if referer is not None:
     headers['referer'] = referer # Use referer to avoid 403 with Pixiv
 
-  print("Getting this url now: %s" % url)
+  print("Getting this url now: {}".format(url))
   r = get(url, headers=headers, cookies=cookie)
 
   if r.status_code == 200:
     # Swap out file extension if the one we found was wrong
     detectedFileType = what('',h=r.content)
+    if detectedFileType == 'jpeg': detectedFileType = 'jpg' # Use short jpg
     if detectedFileType not in imageFileName:
       imageFileName = "{}.{}".format(imageFileName[:imageFileName.rfind('.')], detectedFileType)
       print("Detected the wrong filename, swapped to {}".format(detectedFileType))
@@ -185,11 +187,11 @@ def createArchive(directory, zip):
 def tagListGrabber(desiredTagName, driver):
   for x in range(1,20): # Try up to 19 elements
     try:
-      xpath_tagCheck = pururin_xpath_tableInfo + '/tbody/tr[%s]/td[%s]%s'
-      tagElement = driver.find_element_by_xpath(xpath_tagCheck % (x, '1', ''))
+      xpath_tagCheck = pururin_xpath_tableInfo + '/tbody/tr[{}]/td[{}]{}'
+      tagElement = driver.find_element_by_xpath(xpath_tagCheck.format(x, '1', ''))
       if tagElement.text.lower().find(desiredTagName.lower()) != -1:
-        tagValueElement = driver.find_element_by_xpath(xpath_tagCheck % (x, '2', '/ul/li/a'))
-        return directoryCleaner(tagValueElement.text) # Remove any illegal characters
+        tagValueElement = driver.find_element_by_xpath(xpath_tagCheck.format(x, '2', '/ul/li/a'))
+        return dirFileNameCleaner(tagValueElement.text) # Remove any illegal characters
     except NoSuchElementException:
       if (x == 1):
         break # If this broke on the first time, then just give up - wrong page.
@@ -202,7 +204,13 @@ def tagListGrabber(desiredTagName, driver):
 def bookNameGrabber(driver):
   try:
     bookNameElement = driver.find_element_by_xpath(pururin_xpath_book_name)
-    return bookNameElement.text.split(' / ')[0] # Split on / (Japanese name)
+    bookName = bookNameElement.text.split(' / ')[0] # Split on / (Japanese name)
+
+    bookNameSplit = bookName.split(' | ') # Split on Romanji title | English translation
+    if len(bookNameSplit == 2):
+      return bookNameSplit[1]
+    else:
+      return bookName
   except NoSuchElementException:
     return "ERROR_BLANK_BOOK_NAME"
 
@@ -220,7 +228,7 @@ def galleryGrab(driver):
   for x in range(1, int(options.gallery)+1): # Try elements 1->n gallery arg
     try:
       xpath_bookCheck = pururin_xpath_gallery + pururin_xpath_gallery_sub
-      bookElement = driver.find_element_by_xpath(xpath_bookCheck % x)
+      bookElement = driver.find_element_by_xpath(xpath_bookCheck.format(x))
       newLink = bookElement.get_attribute('href') # Grab the book url
       newLinks.append(newLink)  # Add it to the list
     except NoSuchElementException:
@@ -237,7 +245,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
   # Handle gallery pages
   galleryLinks = galleryGrab(driver)
   if len(galleryLinks) > 0:
-    print("That last link was a gallery! %s books were found:" % len(galleryLinks))
+    print("That last link was a gallery! {} books were found:".format(len(galleryLinks)))
 
     # Some fuckin' fancy footwork here. In-place alter to print out book titles from html links
     print(capwords(', '.join([bookUrl[bookUrl.rfind('/')+1:bookUrl.rfind('.html')] for bookUrl in galleryLinks]).replace('-', ' ')))
@@ -272,7 +280,13 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
     bookName = artistName + ' - ' + bookName
 
   # Print out title to console
-  print("Title: %s" % bookName)
+  print("Title: {}".format(bookName))
+
+  # Check for bad name and report it if found
+  cleanBookName = dirFileNameCleaner(bookName, '-')
+  if cleanBookName != bookName:
+    print("Renamed title: {}".format(cleanBookName))
+    bookName = cleanBookName
 
   # Navigate to to the first page if we're on a gallery or thumbnails page.
   try:
@@ -311,10 +325,10 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
       nextPageButton.click()
 
     except NoSuchElementException:
-      print("Reached end for \"%s\", got through %s pages." % (bookName, page))
+      print("Reached end for \"{}\", got through {} pages.".format(bookName, page))
       break
 
-  print("Done with %s" % bookName)
+  print("Done with {}".format(bookName))
   return [bookName, urlString]
 
 
@@ -322,7 +336,7 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
 def pixivAlbumGrab(driver, albumURL):
   albumURL = albumURL.replace('manga', 'manga_big') + '&page='  # Get the full page link
   albumSize = int(driver.find_element_by_css_selector(pixiv_css_album_size).text)
-  print("Grabbing URLs: There should be %s images in this album..." % albumSize)
+  print("Grabbing URLs: There should be {} images in this album...".format(albumSize))
 
   itemUrlPairs = []
   albumExhausted = False
@@ -366,11 +380,11 @@ def pixivDownloadConfig(url):
 def pixiv(driver, startURL, loginNeeded, outputDir):
   startURL = pixivDownloadConfig(startURL) # Detect re-download information
   if redownload_jump != 1:
-    print("->Jump count @%s" % redownload_jump)
+    print("->Jump count @{}".format(redownload_jump))
   if redownload_first != 1:
-    print("->First work @%s" % redownload_first)
+    print("->First work @{}".format(redownload_first))
   if redownload_limit != 0:
-    print("->Limit work @%s" % redownload_limit)
+    print("->Limit work @{}".format(redownload_limit))
 
   # Go to the starting page!
   driver.set_page_load_timeout(15)
@@ -408,15 +422,15 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
   # Book's title is "user's name - tag"
   bookName = userName + tag
-  bookName = directoryCleaner(bookName)
+  bookName = dirFileNameCleaner(bookName, '-')
 
-  print("Book title: %s" % bookName)
+  print("Book title: {}".format(bookName))
 
   # Alrighty, time to get some images!
   if "illust_id" not in driver.current_url:
     # We're on their works main page, let's click their first work...
     try:
-      driver.find_element_by_xpath(pixiv_xpath_first_image_item % redownload_first).click()
+      driver.find_element_by_xpath(pixiv_xpath_first_image_item.format(redownload_first)).click()
     except TimeoutException:
       driver.refresh()
 
@@ -431,7 +445,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
     if redownload_limit != 0:
       if workNumber > redownload_limit + (redownload_jump - 1):
-        print("We reached the end of a limited job of %s works." % redownload_limit)
+        print("We reached the end of a limited job of {} works.".format(redownload_limit))
         break # Breaks the 'exhausted' loop, effectively going straight to this function's return.
 
     # Let's grab a work title
@@ -462,16 +476,16 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
         # Let's give this work a nice, long name
         imageName = "{} - {} - {}{}".format(bookName, str(workNumber).zfill(3), workTitle, fileExtension)
-        imageName = directoryCleaner(imageName)
+        imageName = dirFileNameCleaner(imageName)
 
         # Let's download it!
-        print("Attempting DL: %s..." % imageName)
+        print("Attempting DL: {}...".format(imageName))
         imageDownloader(imageUrl, outputDir + '/' + bookName, imageName, request_cookies, driver.current_url)
 
         # Click it closed
         driver.find_element_by_css_selector(pixiv_css_original_image_close).click()
       else:
-        print("Was on a normal work page but I couldn't find \"%s\"" % pixiv_css_original_image)
+        print("Was on a normal work page but I couldn't find \"{}\"".format(pixiv_css_original_image))
 
     # ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM ------- ALBUM -------
     else:
@@ -487,7 +501,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
           driver.refresh()
 
         # Grab all the image URLs
-        print("Grabbing URLs: %s... " % ("{} - {} - {}".format(bookName, str(workNumber).zfill(3), workTitle)))
+        print("Grabbing URLs: {} - {} - {}... ".format(bookName, str(workNumber).zfill(3), workTitle))
         albumImages = pixivAlbumGrab(driver, albumURL)
         # albumImages is a list of lists with [referrer url, image url]
 
@@ -502,10 +516,10 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 
           # Let's give this work a nice, long name
           imageName = "{} - {} - {}_{}{}".format(bookName, str(workNumber).zfill(3), workTitle, str(albumSeriesNumber).zfill(3), fileExtension)
-          imageName = directoryCleaner(imageName)
+          imageName = dirFileNameCleaner(imageName)
 
           # Let's download it!
-          print("Attempting DL: %s..." % imageName)
+          print("Attempting DL: {}...".format(imageName))
           imageDownloader(imageUrlPair[1], outputDir + '/' + bookName, imageName, request_cookies, imageUrlPair[0])
           albumSeriesNumber += 1 # Doing a series, add a new number
 
@@ -528,20 +542,20 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
           mightBeLastPage = False
         except TimeoutException:
           # Thought it might be ready, but didn't work!
-          print("Retrying to find the next work button. %s retries left..." % retriesLeft)
+          print("Retrying to find the next work button. {} retries left...".format(retriesLeft))
           retriesLeft -= 1 # One retry taken!
 
           if retry_refresh: # If we're serious, we can try refreshing...
             if workURL is not None:
-              print("Trying returning to workURL %s" % workURL)
+              print("Trying returning to workURL {}".format(workURL))
               driver.get(workURL) # Album failure, more effective to re-get workURL
             else:
-              print("Trying refresh of current page %s" % driver.current_url)
+              print("Trying refresh of current page {}".format(driver.current_url))
               driver.refresh()
 
       else:                           # Failed :(
         # Wasn't there, didn't work.
-        print("Retrying to find the next work button. %s retries left..." % retriesLeft)
+        print("Retrying to find the next work button. {} retries left...".format(retriesLeft))
         retriesLeft -= 1 # One retry taken!
         if retry_refresh: # If we're serious, we can try refreshing...
           driver.refresh()
@@ -550,7 +564,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
       # Retries exhausted, maybe we really have hit the end of the book...
       exhaustion = True
 
-  print("Reached the end of Pixiv Book: \"%s\"" % bookName)
+  print("Reached the end of Pixiv Book: \"{}\"".format(bookName))
   return [bookName, urlString]
 
 
@@ -558,7 +572,7 @@ def pixiv(driver, startURL, loginNeeded, outputDir):
 #http://stackoverflow.com/questions/7854077/using-a-session-cookie-from-selenium-in-urllib2
 def getDriverCookies(driver): # Load driver_cookies from driver
   driver_cookies = driver.get_cookies()
-  print("Got cookies, cookie size = %s." % str(len(driver_cookies)))
+  print("Got cookies, cookie size = {}.".format(str(len(driver_cookies))))
   # print(pp.pprint(driver_cookies))
 
 
@@ -576,25 +590,24 @@ def addDriverCookies(driver): # Load driver_cookies into driver
 
 def loadCookiesFile(filePath):  # Load cookies file into driver_cookies
   if isfile(filePath):
-    print("Reading driver cookies from %s." % filePath)
-    inFile = open(filePath, 'r')
-    driver_cookies = eval(inFile.read())
-    inFile.close()
+    print("Reading driver cookies from {}.".format(filePath))
+    with open(filePath, 'r') as inFile:
+      driver_cookies = eval(inFile.read())
+
     if len(driver_cookies) < 1:
-      print("File found, but nothing in %s." % filePath)
+      print("File found, but nothing in {}.".format(filePath))
       return False # Got something, but it's empty
 
     return True
   else:
-    print ("Didn't find driver cookies in %s." % filePath)
+    print ("Didn't find driver cookies in {}.".format(filePath))
     return False
 
 
 def saveCookiesFile(filePath):  # Write driver_cookies to file
   print("Writing driver cookies to file.")
-  inFile = open(filePath, 'w')
-  inFile.write(str(driver_cookies))
-  inFile.close()
+  with open(filePath, 'w') as inFile:
+    inFile.write(str(driver_cookies))
 
 
 def tryPixivCookies(driver):  # Attempt to load cookies from file
@@ -621,7 +634,7 @@ def pixivLogin(driver):
     driver.find_element_by_id(pixiv_id_login_name).send_keys(userName)
     driver.find_element_by_id(pixiv_id_login_pass).send_keys(passWord, Keys.RETURN)
 
-    print("Logging in to Pixiv with %s" % (userName))
+    print("Logging in to Pixiv with {}".format((userName)))
     sleep(3)
 
     # We're now logged in, let's save it.
@@ -633,7 +646,7 @@ def pixivLogin(driver):
 # The main function. Starts with a string array of starting URLs.
 def imageURLCrawler(urlList):
   # Start up Firefox
-  print("Adblock xpi: %s\nAdblock profile: %s" % (adblock_xpi, profile_location))
+  print("Adblock xpi: {}\nAdblock profile: {}".format(adblock_xpi, profile_location))
   firefoxProfile = webdriver.FirefoxProfile(profile_location)
   firefoxProfile.add_extension(adblock_xpi)
 
@@ -651,19 +664,19 @@ def imageURLCrawler(urlList):
   # Print out some stuff.
   print("\n-------\nStarting image crawler...")
   if len(options.startURL) > 0:
-    print("Starting URL: %s" % options.startURL)
-  if len(options.openList) > 0:
-    print("Opening list file %s" % options.openList)
+    print("Starting URL: {}".format(options.startURL))
+  if len(options.inputList) > 0:
+    print("Opening list file {}".format(options.inputList))
   if options.writeFile:
-    print("Writing image urls to file. View saved files in %s" % outputDir)
+    print("Writing image urls to file. View saved files in {}".format(outputDir))
   if options.download:
-    print("Downloading images enabled. View saved files in %s" % outputDir)
+    print("Downloading images enabled. View saved files in {}".format(outputDir))
   if options.cbz:
-    print("Downloading and archiving images enabled. View saved .cbz in %s" % outputDir)
+    print("Downloading and archiving images enabled. View saved .cbz in {}".format(outputDir))
   elif options.zip:
-    print("Downloading and archiving images enabled. View saved .zip in %s" % outputDir)
-  print("Set to download %s book(s)" % len(urlList))
-  print("Throttle set to %s second(s).\n-------" % options.throttle)
+    print("Downloading and archiving images enabled. View saved .zip in {}".format(outputDir))
+  print("Set to download {} book(s)".format(len(urlList)))
+  print("Throttle set to {} second(s).".format(options.throttle))
 
   pixivLoginNeeded = True
   bookNumber = 0
@@ -671,11 +684,20 @@ def imageURLCrawler(urlList):
   # Book loop. If there are multiple books loaded, it'll do each one in this loop.
   for startURL in urlList:
     bookNumber += 1
-    if len(startURL) == 0:
-      print("Skipping blank URL.")
-      continue # Skip blank lines
 
-    print("Viewing link %s of %s: %s" % (bookNumber, len(urlList), startURL))
+    if len(startURL) == 0:
+      continue # Skip blank lines
+    if 'http' not in startURL and 'html' not in startURL:
+      print("Hey, this URL looks broken")
+      continue
+    if '.jpg' in startURL:
+      print("Hey, you accidentally used a thumbnail!")
+      continue
+    if startURL == 'stop':
+      print("Stopping early due to 'stop' line!")
+      break # Stop what we're doing
+
+    print("-------\nViewing link {} of {}: {}".format(bookNumber, len(urlList), startURL))
 
     # A Pururin Link!
     if 'pururin' in startURL:
@@ -689,7 +711,7 @@ def imageURLCrawler(urlList):
       pixivLoginNeeded = False;
 
     else:
-      print("I don't think this link will work: %s" % startURL)
+      print("I don't think this link will work: {}".format(startURL))
       continue # Link isn't recognized, just move onto the next
 
     if bookName == "!@#$CONTINUE!@#$":
@@ -701,7 +723,7 @@ def imageURLCrawler(urlList):
     # Write the archive file.
     if options.zip or options.cbz:
       if len(bookName) == 0:
-        print("WARNING. BOOKNAME IS BLANK. CANNOT ARCHIVE %s. QUITTING." % outputDir + "/")
+        print("WARNING. BOOKNAME IS BLANK. CANNOT ARCHIVE {}/. QUITTING.".format(outputDir))
         quit()
       else:
 
@@ -711,24 +733,24 @@ def imageURLCrawler(urlList):
         createArchive(outputDir + '/' + bookName, zipf)
         zipf.close()
 
-        print("Wrote archive \"%s\"" % (outputDir + '/' + bookName + '.' + extension))
+        print("Wrote archive \"{}\"".format(outputDir + '/' + bookName + '.' + extension))
 
         # If the download option isn't set, delete the download directory.
         if not options.download:
           rmtree(outputDir + '/' + bookName)
 
         else:
-          print("Wrote to directory \"%s\"" % (outputDir + '/' + bookName + '/'))
+          print("Wrote to directory \"{}\"".format(outputDir + '/' + bookName + '/'))
 
     # Write the output file.
     if options.writeFile and len(bookName) > 0:
       if not isdir(outputDir):
         mkdir(outputDir)
 
-      outfile = open(outputDir + '/' + bookName + ".txt", 'w')
-      outfile.write(urlString)
-      outfile.close()
-      print("Wrote to file \"%s\"" % (outputDir + '/' + bookName + ".txt"))
+      with open(outputDir + '/' + bookName + ".txt", 'w') as outfile:
+        outfile.write(urlString)
+
+      print("Wrote to file \"{}\"".format(outputDir + '/' + bookName + ".txt"))
 
 
     sleep(int(options.throttle)*2)
@@ -741,7 +763,7 @@ def imageURLCrawler(urlList):
 #### Parser Stuff
 parser = OptionParser()
 parser.add_option("-s", "--startURL", help="The starting URL", default='', metavar="startURL")
-parser.add_option("-o", "--openList", help="List file (\\n delimit)", default='', metavar="filename")
+parser.add_option("-i", "--inputList", help="List file (\\n delimit)", default='', metavar="filename")
 parser.add_option("-n", "--pageLimit", help="Only download n pages", default='9999', metavar="integer")
 parser.add_option("-g", "--gallery", help="Gallery page size", default='20', metavar="integer")
 parser.add_option("-t", "--throttle", help="Seconds between pages", default='2', metavar="integer")
@@ -752,16 +774,14 @@ parser.add_option("-z", "--zip", help="Create a zip file ...", default=False, ac
 parser.add_option("-c", "--cbz", help="OR: Create a cbz file", default=False, action="store_true")
 
 (options, args) = parser.parse_args()
-# print("options:\n  %s\nargs:\n  %s" % (options, args))
 
 urlList = []
 
 # Open the list file (if one was specified)
-if isfile(options.openList):
-  listFile = open(options.openList, 'r')
-  listContents = listFile.read()
+if isfile(options.inputList):
+  with open(options.inputList, 'r') as listFile:
+    listContents = listFile.read()
   urlList = listContents.split("\n")
-  listFile.close()
 
 # Append the startURL to the urlList
 if len(options.startURL) > 0:
