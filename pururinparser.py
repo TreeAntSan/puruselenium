@@ -213,9 +213,9 @@ def bookNameGrabber(driver):
 
     bookNameSplit = bookName.split(' | ') # Split on Romanji title | English translation
     if len(bookNameSplit) == 2:
-      return bookNameSplit[1]
+      return bookNameSplit[1].strip('.')  # Strip trailing periods (it messes things up)
     else:
-      return bookName
+      return bookName.strip('.')          # Strip trailing periods (it messes things up)
   except NoSuchElementException:
     return "ERROR_BLANK_BOOK_NAME"
 
@@ -796,7 +796,7 @@ def imageURLCrawler(urlList):
 
       with open("{}/{}".format(outputDir, options.dls), 'a') as successFile:
         successFile.write("\n{}".format(startURL))
-        print("Wrote successful dl to file \"{}/{}\"".format(outputDir, options.dls))
+        print("Wrote successful dl to history file \"{}/{}\"".format(outputDir, options.dls))
 
     # Sleep a little bit (at least one second)
     sleep(1 + int(options.throttle))
@@ -835,5 +835,10 @@ if len(options.startURL) > 0:
   urlList.append(options.startURL)
 
 # Do it!
-returnArray = imageURLCrawler(urlList)
+try:
+  print("Remember: Ctrl+C will stop the program.")
+  returnArray = imageURLCrawler(urlList)
+except KeyboardInterrupt:
+  quit("\nStopping Now!!")
+
 print("-------\nDone!")
