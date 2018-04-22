@@ -65,14 +65,14 @@ from requests import get
 # Finding them http://selenium-python.readthedocs.org/en/latest/locating-elements.html
 
 #Pururin
-pururin_xpath_imageElement = '//a[@class="image-next"]/img'
-pururin_xpath_nextPageButton = "//a[@class='square link-next image-next']"
+pururin_xpath_imageElement = '//*[@id="images-holder"]/img'
+pururin_xpath_nextPageButton = "//a[@class='read-more image-next']"
 pururin_xpath_galleryFirstPage = "//i[@class='fa fa-book']"
-pururin_xpath_tableInfo = "//table[@class='table-info']"
+pururin_xpath_tableInfo = "//table[@class='table']"
 pururin_xpath_tableInfo_sub = "/tbody/tr[{}]/td[{}]{}"
-pururin_xpath_gallery = "//ul[@class='gallery-list']"
-pururin_xpath_gallery_sub = "/li[{}]/div/a"
-pururin_xpath_book_name = "//h1[@class='otitle']"
+pururin_xpath_gallery = "//div[@class='gallery-listing']"
+pururin_xpath_gallery_sub = "/div[@class='row']/a[{}]"
+pururin_xpath_book_name = "//span/div[@class='title']"
 pururin_xpath_gallery_pages = "//div[@class='pager jumper']"
 pururin_xpath_gallery_pages_sub = "/a[{}]"
 pururin_xpath_gallery_pages_first = "/span"
@@ -213,9 +213,11 @@ def bookNameGrabber(driver):
 
     bookNameSplit = bookName.split(' | ') # Split on Romanji title | English translation
     if len(bookNameSplit) == 2:
-      return bookNameSplit[1].strip('.')  # Strip trailing periods (it messes things up)
-    else:
-      return bookName.strip('.')          # Strip trailing periods (it messes things up)
+      bookName = bookNameSplit[1]
+
+    bookName = sub("'S", "'s", bookName) # The site has 'S a lot of the time for some reason
+    return bookName.strip('.')  # Strip trailing periods (it messes things up)
+
   except NoSuchElementException:
     return "ERROR_BLANK_BOOK_NAME"
 
@@ -689,7 +691,7 @@ def imageURLCrawler(urlList):
   firefoxProfile.set_preference("webdriver.load.strategy", "unstable");
 
   driver = webdriver.Firefox(firefox_profile=firefoxProfile)
-  driver.implicitly_wait(10) # ?? Tries anyway if the page keeps loading after 5 sec?
+  #driver.implicitly_wait(10) # ?? Tries anyway if the page keeps loading after 5 sec?
 
   outputDir = options.export
   if len(outputDir) == 0:
