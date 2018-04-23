@@ -65,7 +65,7 @@ from requests import get
 # Finding them http://selenium-python.readthedocs.org/en/latest/locating-elements.html
 
 #Pururin
-pururin_xpath_imageElement = '//*[@id="images-holder"]/img'
+pururin_xpath_imageElement = "//*[@id='images-holder']/img"
 pururin_xpath_nextPageButton = "//a[@class='read-more image-next']"
 pururin_xpath_galleryFirstPage = "//i[@class='fa fa-book']"
 pururin_xpath_tableInfo = "//table[@class='table']"
@@ -353,6 +353,12 @@ def pururin(driver, startURL, urlList, outputDir, bookNumber):
         # Download imageUrl
         if options.download or options.zip or options.cbz:
           imageDownloader(imageUrl, "{}/{}".format(outputDir, bookName), "", None, driver.current_url)
+
+    except NoSuchElementException:
+      print("Could not find image for page {} for \"{}\".".format(page, bookName))
+      break
+
+    try:
 
       # Throttle the speed, otherwise Selenium will rip through pages a half-second a piece.
       sleep(int(options.throttle))
@@ -691,7 +697,7 @@ def imageURLCrawler(urlList):
   firefoxProfile.set_preference("webdriver.load.strategy", "unstable");
 
   driver = webdriver.Firefox(firefox_profile=firefoxProfile)
-  #driver.implicitly_wait(10) # ?? Tries anyway if the page keeps loading after 5 sec?
+  driver.implicitly_wait(10) # ?? Tries anyway if the page keeps loading after 5 sec?
 
   outputDir = options.export
   if len(outputDir) == 0:
